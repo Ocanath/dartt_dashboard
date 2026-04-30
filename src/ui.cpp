@@ -853,22 +853,22 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 			ImGui::SameLine();
 			ImGui::Text("Baudrate: ");
 			ImGui::SameLine();
-			ImGui::SetNextItemWidth(50);
-			uint32_t baudrate = dl.serial.get_baud_rate();
+			ImGui::SetNextItemWidth(80);
+			static uint32_t baudrate = 115200;
 			ImGui::InputScalar("##baudrate", ImGuiDataType_U32, &baudrate);
-			if(ImGui::IsItemDeactivatedAfterEdit())
+			// Stay in sync with the actual baud rate while connected and not being edited
+			if (dl.serial.connected() && !ImGui::IsItemActive())
+				baudrate = (uint32_t)dl.serial.get_baud_rate();
+			ImGui::SameLine();
+			if (dl.serial.connected())
 			{
-				printf("Disconnecting serial...\n");
-				dl.serial.disconnect();
-				printf("done.\n Reconnecting with baudrate %d\n", baudrate);
-				if(dl.serial.autoconnect(baudrate))
-				{
-					printf("Success. Serial connected\n");
-				}
-				else
-				{
-					printf("Serial failed to connect\n");
-				}
+				if (ImGui::Button("Disconnect"))
+					dl.serial.disconnect();
+			}
+			else
+			{
+				if (ImGui::Button("Connect"))
+					dl.serial.autoconnect(baudrate);
 			}
 			break;
 		}

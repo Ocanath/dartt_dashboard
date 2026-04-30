@@ -364,8 +364,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// Rebuild subscribed and dirty lists before read/write operations
-		collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+		// dirty_list is main-thread only — no lock needed
 		collect_dirty_fields(config.leaf_list, config.dirty_list);
 
 		// WRITE: Send dirty fields to device
@@ -418,6 +417,7 @@ int main(int argc, char* argv[])
 		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);
 		{
 			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);
+			collect_subscribed_fields(config.leaf_list, config.subscribed_list);
 			bool value_edited = render_live_expressions(config, plot, config_json_path, dl);
 			(void)value_edited;
 			render_plotting_menu(plot, config.root, config.subscribed_list);
