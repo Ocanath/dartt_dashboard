@@ -63,6 +63,8 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
         for (int i = 0; i < (int)c->config->subscribed_list.size(); i++)
         {
             DarttField* field = c->config->subscribed_list[i];
+            if (field->state.dirty)
+				continue;
             std::memcpy(&field->value.u8,
                         c->config->periph_buf.buf + field->byte_offset,
                         field->nbytes);

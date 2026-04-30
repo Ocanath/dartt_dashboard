@@ -184,14 +184,14 @@ void float_field_handler(DarttField* field)
 	if (field->use_display_scale == false)
 	{
 		ImGui::InputFloat("##val", &field->value.f32, 0, 0, "%f");
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.f32 = (float)(field->display_value / field->display_scale);
 		}
 	}
@@ -207,14 +207,14 @@ void int32_field_handler(DarttField * field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S32, &field->value.i32, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit(); 
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit(); 
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) 
 		{ 
-			field->dirty = true; 
+			field->state.dirty = true; 
 			field->value.i32 = (int32_t)(field->display_value/field->display_scale);
 		}
 	}
@@ -225,14 +225,14 @@ void uint32_field_handler(DarttField * field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U32, &field->value.u32, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit(); 
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit(); 
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) 
 		{ 
-			field->dirty = true; 
+			field->state.dirty = true; 
 			field->value.i32 = (uint32_t)(field->display_value/field->display_scale);
 		}
 	}
@@ -244,14 +244,14 @@ void int16_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S16, &field->value.i16, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i16 = (int16_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -262,14 +262,14 @@ void uint16_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U16, &field->value.u16, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u16 = (uint16_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -280,14 +280,14 @@ void int8_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S8, &field->value.i8, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i8 = (int8_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -298,14 +298,14 @@ void uint8_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U8, &field->value.u8, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u8 = (uint8_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -316,14 +316,14 @@ void double_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputDouble("##val", &field->value.f64, 0, 0, "%f");
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.f64 = (double)(field->display_value / field->display_scale);
 		}
 	}
@@ -334,14 +334,14 @@ void int64_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S64, &field->value.i64, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i64 = (int64_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -352,14 +352,14 @@ void uint64_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U64, &field->value.u64, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u64 = (uint64_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -518,7 +518,7 @@ static bool render_single_field(DarttField* field, bool show_display_props)
 
     ImGui::PopID();
 
-    return field->dirty;
+    return field->state.dirty;
 }
 
 // Render field tree iteratively, returns true if any value was edited

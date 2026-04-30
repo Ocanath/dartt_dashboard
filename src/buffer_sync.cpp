@@ -12,7 +12,7 @@ void collect_dirty_fields(const std::vector<DarttField*> &leaf_list, std::vector
 	for(size_t i = 0; i < leaf_list.size(); i++)
 	{
 		DarttField * leaf = leaf_list[i];
-		if (leaf->dirty)
+		if (leaf->state.dirty)
 		{
 			out.push_back(leaf);
 		}
@@ -142,6 +142,6 @@ void clear_dirty_flags(const MemoryRegion& region)
 {
     for (DarttField* field : region.fields) 
 	{
-        field->dirty = false;
+        field->state.dirty = false;
     }
 }
