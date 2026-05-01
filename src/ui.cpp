@@ -661,7 +661,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		for (size_t i = 0; i < plot.lines.size(); i++)
 		{
-			plot.lines[i].points.clear();
+			plot.lines[i].clear();
 		}
 	}
 	ImGui::Separator();

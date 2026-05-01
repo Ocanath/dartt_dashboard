@@ -24,7 +24,7 @@ public:
 	std::vector<fpoint_t> points;
 	rgb_t color;
 
-
+	
 
 	float * xsource;	//pointer to the x variable which we source for our data stream
 	float * ysource;	//pointer to the y variable which we source for our data stream
@@ -52,7 +52,7 @@ public:
 	Line(int capacity);
 
 	bool enqueue_data(int screen_width);
-	
+	void clear();
 };
 
 class Plotter
