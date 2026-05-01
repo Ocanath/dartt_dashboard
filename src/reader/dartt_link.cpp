@@ -443,6 +443,7 @@ void DarttLink::build_read_requests()
 {
 	std::lock_guard<std::mutex> lock(read_request_mutex_);
 	read_request_list_.clear();
+	read_request_index_ = 0;	//must clear this to avoid an out of bounds access if the list size shrinks
 	for(dartt_mem_t region : subscribed_regions_)
 	{
 		enqueue_read_requests(region);

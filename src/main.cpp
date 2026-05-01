@@ -59,17 +59,20 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
     ReadCallbackCtx* c = (ReadCallbackCtx*)ctx;
 
     {
-        std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex);
-        for (int i = 0; i < (int)c->config->subscribed_list.size(); i++)
-        {
-            DarttField* field = c->config->subscribed_list[i];
-            if (field->state.dirty)
-				continue;
-            std::memcpy(&field->value.u8,
-                        c->config->periph_buf.buf + field->byte_offset,
-                        field->nbytes);
-        }
-        calculate_display_values(c->config->leaf_list);
+        if (c->dl->periph_buf_mutex.try_lock())
+		{
+			std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex, std::adopt_lock);
+			for (int i = 0; i < (int)c->config->subscribed_list.size(); i++)
+			{
+				DarttField* field = c->config->subscribed_list[i];
+				if (field->state.dirty)
+					continue;
+				std::memcpy(&field->value.u8,
+							c->config->periph_buf.buf + field->byte_offset,
+							field->nbytes);
+			}
+			calculate_display_values(c->config->leaf_list);
+		}
     }
 
     {
@@ -80,13 +83,12 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 			In order to prevent the render from starving the read loop, we will reduce the amount of data which is loaded into the plot buffer and introduce some
 			jitter in the rendered visual by missing some enqueue calls with a try-lock scheme, rather than spinning until access is available.
 		*/
-		if(!c->plot->plot_mutex.try_lock()) 	
-		{
-			return;
+		if(c->plot->plot_mutex.try_lock()) 	
+		{	
+			std::lock_guard<std::mutex> lock(c->plot->plot_mutex, std::adopt_lock);
+			for (int i = 0; i < (int)c->plot->lines.size(); i++)
+				c->plot->lines[i].enqueue_data(c->plot->window_width);
 		}
-		std::lock_guard<std::mutex> lock(c->plot->plot_mutex, std::adopt_lock);
-        for (int i = 0; i < (int)c->plot->lines.size(); i++)
-            c->plot->lines[i].enqueue_data(c->plot->window_width);
     }
 }
 
@@ -415,13 +417,13 @@ int main(int argc, char* argv[])
 		// Render UI
 		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
 		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);
-		{
+		{//this lock protects the periph_buf -> config tree load which occurs in the read loop.
 			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);
 			collect_subscribed_fields(config.leaf_list, config.subscribed_list);
 			bool value_edited = render_live_expressions(config, plot, config_json_path, dl);
 			(void)value_edited;
-			render_plotting_menu(plot, config.root, config.subscribed_list);
 		}
+		render_plotting_menu(plot, config.root, config.subscribed_list);
 		
 
 		// Render

@@ -639,10 +639,11 @@ static DarttField* render_field_selector_tree(DarttField* root)
 bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<DarttField*> &subscribed_list)
 {
 	ImGui::Begin("Plot Settings");
-
+	
 	// Add line button
 	if (ImGui::SmallButton("+"))
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		plot.lines.push_back(Line());
 		plot.lines.back().xsource = &plot.sys_sec;
 		int color_index = (plot.lines.size() % NUM_COLORS);
@@ -657,6 +658,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	ImGui::SameLine(ImGui::GetWindowWidth() - clear_width - ImGui::GetStyle().WindowPadding.x);
 	if (ImGui::Button("Clear"))
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		for (size_t i = 0; i < plot.lines.size(); i++)
 		{
 			plot.lines[i].points.clear();
@@ -667,6 +669,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	int line_to_remove = -1;
 	for (size_t line_idx = 0; line_idx < plot.lines.size(); line_idx++)
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		Line& line = plot.lines[line_idx];
 		ImGui::PushID((int)line_idx);
 
@@ -813,6 +816,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	// Remove line after loop to avoid iterator invalidation
 	if (line_to_remove >= 0 && line_to_remove < (int)plot.lines.size())
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		plot.lines.erase(plot.lines.begin() + line_to_remove);
 	}
 
