@@ -417,11 +417,18 @@ int main(int argc, char* argv[])
 		// Render UI
 		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
 		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);
-		{//this lock protects the periph_buf -> config tree load which occurs in the read loop.
-			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);
-			collect_subscribed_fields(config.leaf_list, config.subscribed_list);
-			bool value_edited = render_live_expressions(config, plot, config_json_path, dl);
-			(void)value_edited;
+
+		{
+			//this lock is a bit of a misnomer - it's protecting display_value, the subscribed list, periph_buf, field.value all in one. 
+			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
+			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
+			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
+			render_live_expressions(config, plot, config_json_path, dl);
+			if (config.subscribed_dirty)
+			{
+				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+			}
+			config.subscribed_dirty = false;
 		}
 		render_plotting_menu(plot, config.root, config.subscribed_list);
 		

@@ -366,7 +366,7 @@ void uint64_field_handler(DarttField* field)
 }
 
 // Render a single field's row (called from iterative loop)
-static bool render_single_field(DarttField* field, bool show_display_props) 
+static bool render_single_field(DarttField* field, bool show_display_props, bool& sub_changed)
 {
     bool is_leaf = field->children.empty();
 
@@ -493,6 +493,7 @@ static bool render_single_field(DarttField* field, bool show_display_props)
         if (ImGui::Checkbox("##sub", &sub_state)) {
             // Toggle: if was mixed or off, turn all on; if all on, turn all off
             set_subscribed_all(field, !all_sub);
+            sub_changed = true;
         }
 
         if (any_sub && !all_sub) {
@@ -501,9 +502,9 @@ static bool render_single_field(DarttField* field, bool show_display_props)
     } 
 	else 
 	{
-        if (ImGui::Checkbox("##sub", &field->subscribed)) 
+        if (ImGui::Checkbox("##sub", &field->subscribed))
 		{
-            // Individual leaf subscription changed
+            sub_changed = true;
         }
     }
 
@@ -522,7 +523,7 @@ static bool render_single_field(DarttField* field, bool show_display_props)
 }
 
 // Render field tree iteratively, returns true if any value was edited
-static bool render_field_tree(DarttField* root, bool show_display_props)
+static bool render_field_tree(DarttField* root, bool show_display_props, bool& sub_changed)
 {
     bool any_edited = false;
     std::vector<RenderWork> stack;
@@ -544,7 +545,7 @@ static bool render_field_tree(DarttField* root, bool show_display_props)
         bool is_leaf = work.field->children.empty();
 
         // Render this field's row
-        if (render_single_field(work.field, show_display_props))
+        if (render_single_field(work.field, show_display_props, sub_changed))
 		{
             any_edited = true;
         }
@@ -968,9 +969,11 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
         ImGui::TableHeadersRow();
 
         // Render the field tree iteratively
-        if (render_field_tree(&config.root, show_display_props)) {
+        bool sub_changed = false;
+        if (render_field_tree(&config.root, show_display_props, sub_changed)) {
             any_edited = true;
         }
+        config.subscribed_dirty |= sub_changed;
 
         ImGui::EndTable();
     }

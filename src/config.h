@@ -124,13 +124,15 @@ struct DarttConfig
 	std::vector<DarttField*> leaf_list;
 	std::vector<DarttField*> subscribed_list;  // subscribed leaves only
 	std::vector<DarttField*> dirty_list;       // dirty leaves only
-	
+	bool subscribed_dirty;                     // set by UI when any subscription changes
+
     DarttConfig()
         : address(0)
         , nbytes(0)
         , nwords(0)
         , ctl_buf{}
         , periph_buf{}
+        , subscribed_dirty(false)
     {}
 
     ~DarttConfig() {
