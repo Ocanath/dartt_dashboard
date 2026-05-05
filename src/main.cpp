@@ -393,26 +393,6 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// SUBSCRIBE: Rebuild DarttLink read request list when subscriptions change
-		static std::vector<DarttField*> prev_subscribed;
-		if (config.ctl_buf.buf && config.periph_buf.buf)
-		{
-			if (config.subscribed_list != prev_subscribed)
-			{
-				prev_subscribed = config.subscribed_list;
-				std::vector<MemoryRegion> read_regions = build_read_queue(config);
-				dl.clear_subscriptions();
-				for (int i = 0; i < (int)read_regions.size(); i++)
-				{
-					dartt_mem_t region = {
-						.buf  = config.ctl_buf.buf + read_regions[i].start_offset,
-						.size = read_regions[i].length
-					};
-					dl.subscribe_region(region);
-				}
-				dl.build_read_requests();
-			}
-		}
 
 		// Render UI
 		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
@@ -428,8 +408,25 @@ int main(int argc, char* argv[])
 			{
 				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
 			}
-			config.subscribed_dirty = false;
 		}
+		if(config.subscribed_dirty)
+		{
+			if (config.ctl_buf.buf && config.periph_buf.buf)
+			{
+				std::vector<MemoryRegion> read_regions = build_read_queue(config);
+				dl.clear_subscriptions();
+				for (int i = 0; i < (int)read_regions.size(); i++)
+				{
+					dartt_mem_t region = {
+						.buf  = config.ctl_buf.buf + read_regions[i].start_offset,
+						.size = read_regions[i].length
+					};
+					dl.subscribe_region(region);
+				}
+				dl.build_read_requests();
+			}
+		}
+		config.subscribed_dirty = false;	//handled, mark false for next pass
 		render_plotting_menu(plot, config.root, config.subscribed_list);
 		
 
