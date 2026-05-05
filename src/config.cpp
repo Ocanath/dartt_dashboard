@@ -400,7 +400,7 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 
     // Load plotting config if plotter provided
 	load_plotting_config(j, plot, config.leaf_list);
-
+	config.subscribed_dirty = true;	//mark true so the subscribe list gets rebuilt
     return true;
 }
 
