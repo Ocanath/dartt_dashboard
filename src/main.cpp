@@ -43,6 +43,7 @@
 #include "buffer_sync.h"
 #include "plotting.h"
 #include "elf_parser.h"
+#include "time_util.h"
 
 #include <algorithm>
 #include <cstring>
@@ -57,21 +58,23 @@ struct ReadCallbackCtx {
 static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 {
     ReadCallbackCtx* c = (ReadCallbackCtx*)ctx;
-
+	DarttConfig * config = c->config;
     {
         if (c->dl->periph_buf_mutex.try_lock())
 		{
 			std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex, std::adopt_lock);
-			for (int i = 0; i < (int)c->config->subscribed_list.size(); i++)
+			for (int i = 0; i < (int)config->subscribed_list.size(); i++)
 			{
-				DarttField* field = c->config->subscribed_list[i];
+				DarttField* field = config->subscribed_list[i];
 				if (field->state.dirty)
 					continue;
 				std::memcpy(&field->value.u8,
-							c->config->periph_buf.buf + field->byte_offset,
+							config->periph_buf.buf + field->byte_offset,
 							field->nbytes);
 			}
-			calculate_display_values(c->config->leaf_list);
+			config->num_frames += config->subscribed_list.size();
+			config->elapsed_ms = time_get_ms();
+			calculate_display_values(config->leaf_list);
 		}
     }
 
@@ -242,6 +245,7 @@ int main(int argc, char* argv[])
 	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl };
 	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
 
+	time_start();	//start time
 	// Main loop
 	bool running = true;
 	while (running)

@@ -114,6 +114,10 @@ struct DarttConfig
     uint32_t nwords;            // total size in 32-bit words
     DarttField root;            // root struct containing all fields
 
+
+	int64_t num_frames;
+	int64_t elapsed_ms;
+
     // DARTT buffers (allocated after parsing)
 	dartt_mem_t ctl_buf;
 	dartt_mem_t periph_buf;
@@ -125,7 +129,7 @@ struct DarttConfig
 	std::vector<DarttField*> subscribed_list;  // subscribed leaves only
 	std::vector<DarttField*> dirty_list;       // dirty leaves only
 	bool subscribed_dirty;                     // set by UI when any subscription changes
-
+	
     DarttConfig()
         : address(0)
         , nbytes(0)
@@ -133,6 +137,8 @@ struct DarttConfig
         , ctl_buf{}
         , periph_buf{}
         , subscribed_dirty(false)
+		, num_frames(0)
+		, elapsed_ms(0)
     {}
 
     ~DarttConfig() {

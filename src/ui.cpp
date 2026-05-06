@@ -8,7 +8,7 @@
 #include <string>
 #include "colors.h"
 #include "dartt_link.h"
-
+#include "time_util.h"
 
 bool init_imgui(SDL_Window* window, SDL_GLContext gl_context) 
 {
@@ -941,6 +941,18 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 	if(save_clicked)
 	{
 		save_dartt_config(config_json_path.c_str(), config, plot, dl);
+	}
+	
+	//calculate average fps
+	{
+		float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
+		ImGui::Text("FPS: %f", fps);
+		ImGui::SameLine();
+		if(ImGui::Button("Clear FPS Counter"))
+		{
+			config.num_frames = 0;
+			time_start();
+		}
 	}
 
 	ImGui::SameLine();

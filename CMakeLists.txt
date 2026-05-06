@@ -71,6 +71,7 @@ add_executable(${PROJECT_NAME}
 	src/buffer_sync.cpp
 	src/plotting.cpp
 	src/colors.cpp
+	src/time_util.cpp
 )
 
 # Debug symbols
