@@ -510,8 +510,7 @@ int DarttLink::process_frame()
         return DARTT_ERROR_MALFORMED_MESSAGE;
 	}
 
-    uint16_t index_field = (uint16_t)pld.msg.buf[0] | ((uint16_t)pld.msg.buf[1] << 8);
-    if ((index_field & READ_WRITE_BITMASK) != 0)
+    if (pld.rw_bit != 0)	//must be receiving a write message
 	{
 		return DARTT_ERROR_MALFORMED_MESSAGE;
 	}
@@ -525,8 +524,8 @@ int DarttLink::process_frame()
     // length check without needing the original outgoing request on hand.
     misc_read_message_t synthetic_req{};
     synthetic_req.address   = pld.address;
-    synthetic_req.index     = index_field & ~READ_WRITE_BITMASK;
-    synthetic_req.num_bytes = (uint16_t)(pld.msg.len - NUM_BYTES_READ_REPLY_OVERHEAD_PLD);
+    synthetic_req.index     = pld.index_arg;
+    synthetic_req.num_bytes = pld.msg.len;
 
     {
         std::lock_guard<std::mutex> lock(periph_buf_mutex);
