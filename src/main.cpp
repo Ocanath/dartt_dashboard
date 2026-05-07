@@ -419,13 +419,16 @@ int main(int argc, char* argv[])
 			{
 				std::vector<MemoryRegion> read_regions = build_read_queue(config);
 				dl.clear_subscriptions();
-				for (int i = 0; i < (int)read_regions.size(); i++)
+				if(dl.streaming_mode == false)
 				{
-					dartt_mem_t region = {
-						.buf  = config.ctl_buf.buf + read_regions[i].start_offset,
-						.size = read_regions[i].length
-					};
-					dl.subscribe_region(region);
+					for (int i = 0; i < (int)read_regions.size(); i++)
+					{
+						dartt_mem_t region = {
+							.buf  = config.ctl_buf.buf + read_regions[i].start_offset,
+							.size = read_regions[i].length
+						};
+						dl.subscribe_region(region);
+					}
 				}
 				dl.build_read_requests();
 			}

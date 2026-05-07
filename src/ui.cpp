@@ -955,9 +955,20 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		}
 	}
 
-	ImGui::SameLine();
 	static bool show_display_props = false;
 	ImGui::Checkbox("Display Properties", &show_display_props);
+
+	ImGui::SameLine();
+	//streaming mode toggle
+	if(ImGui::Checkbox("Streaming Mode", &dl.streaming_mode))
+	{
+		if(dl.streaming_mode)
+		{
+			dl.clear_subscriptions();
+		}
+		config.subscribed_dirty = true;	//flag out a deferred read request queue rebuild
+	}
+
 
 	ImGui::Separator();
 
