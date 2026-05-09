@@ -3,16 +3,15 @@
 #include <cstring>
 
 
-DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph)
+DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_type_t msgtype)
 {
 	ctl_base = ctl;	//shallow copies, alias these
 	periph_base = periph;
 	cobs_enc_ = { enc_mem_, sizeof(enc_mem_), 0, COBS_ENCODED };
     cobs_dec_ = { dec_mem_, sizeof(dec_mem_), 0, COBS_DECODED };
-	msg_type = TYPE_SERIAL_MESSAGE;
+	msg_type = msgtype;
 	address = 0;
 	base_offset = 0;
-	msg_type = TYPE_SERIAL_MESSAGE;
 	comm_mode = COMM_SERIAL;
 }
 

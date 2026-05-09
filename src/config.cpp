@@ -337,6 +337,7 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 		dl.address = ser_settings.value("dartt_serial_address", 0);
 		dl.base_offset = ser_settings.value("dartt_blob_base_offset", 0);
 		uint32_t baudrate = ser_settings.value("baudrate", 921600);
+		dl.msg_type = ser_settings.value("frame_format", TYPE_SERIAL_MESSAGE);
 		if(baudrate != serial.get_baud_rate())
 		{
 			printf("Disconnecting serial...\n");
@@ -411,6 +412,7 @@ void save_serial_settings(json & j, DarttLink & dl)
 	serial_settings["dartt_blob_base_offset"] = dl.base_offset;
 	serial_settings["baudrate"] = dl.serial.get_baud_rate();
 	serial_settings["comm_mode"] = (int)dl.comm_mode;
+	serial_settings["frame_format"] = (int)dl.msg_type;
 	serial_settings["udp_ip"] = std::string(udp_state.ip);
 	serial_settings["udp_port"] = udp_state.port;
 	serial_settings["tcp_ip"] = std::string(tcp_state.ip);

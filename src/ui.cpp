@@ -846,10 +846,23 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		dl.comm_mode = new_mode;
 	}
 
-	ImGui::Text("Dartt Address: ");
+	int frame_format = dl.msg_type;
+	ImGui::RadioButton("TYPE_SERIAL_MESSAGE", &frame_format, TYPE_SERIAL_MESSAGE);
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(50);
-	ImGui::InputScalar("##dartt_address", ImGuiDataType_U8, &dl.address);
+	ImGui::RadioButton("TYPE_ADDR_MSG", &frame_format, TYPE_ADDR_MESSAGE);
+	if(dl.msg_type != frame_format)
+	{
+		config.subscribed_dirty = true;	//gotta flag out a rebuild, since the read request frame format is stale upon change
+	}
+	dl.msg_type = (serial_message_type_t)frame_format;
+
+	if(dl.msg_type == TYPE_SERIAL_MESSAGE)
+	{
+		ImGui::Text("Dartt Address: ");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(50);
+		ImGui::InputScalar("##dartt_address", ImGuiDataType_U8, &dl.address);
+	}
 
 	switch (dl.comm_mode)
 	{
