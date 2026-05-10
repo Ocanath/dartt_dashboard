@@ -303,6 +303,10 @@ int main(int argc, char* argv[])
 				{
 					pending_json_load = true;
 				}
+				else if (ends_with_ci(dropped_file_path, ".wav"))
+				{
+					audio_writer.filename = dropped_file_path;
+				}
 			}
 		}
 
@@ -424,6 +428,8 @@ int main(int argc, char* argv[])
 
 		{
 			ImGui::Begin("Player");
+
+			ImGui::TextUnformatted(audio_writer.filename.c_str());
 
 			if(audio_writer.running_)
 			{
