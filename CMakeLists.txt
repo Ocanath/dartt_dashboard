@@ -72,6 +72,7 @@ add_executable(${PROJECT_NAME}
 	src/plotting.cpp
 	src/colors.cpp
 	src/time_util.cpp
+	src/wav_writer.cpp
 )
 
 # Debug symbols

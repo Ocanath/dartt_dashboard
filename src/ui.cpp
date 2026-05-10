@@ -109,72 +109,86 @@ struct RenderWork
     bool is_tree_pop;  // true = just call TreePop(), no rendering
 };
 
+/** @brief single dartt field display value helper
+ * @param input pointer to leaf
+ */
+void calculate_display_value(DarttField * leaf)
+{
+	if(leaf == NULL)
+	{
+		return;
+	}
+	if(leaf->subscribed)
+	{
+		switch (leaf->type) 
+		{
+			case FieldType::FLOAT:
+			{
+				leaf->display_value = leaf->value.f32 * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT32:
+			{
+				leaf->display_value = ((float)leaf->value.i32)*leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT32:
+			{
+				leaf->display_value = ((float)leaf->value.u32)*leaf->display_scale;
+				break;
+			}
+			case FieldType::INT16:
+			{
+				leaf->display_value = ((float)leaf->value.i16) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT16:
+			{
+				leaf->display_value = ((float)leaf->value.u16) * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT8:
+			{
+				leaf->display_value = ((float)leaf->value.i8) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT8:
+			{
+				leaf->display_value = ((float)leaf->value.u8) * leaf->display_scale;
+				break;
+			}
+			case FieldType::DOUBLE:
+			{
+				leaf->display_value = (float)leaf->value.f64 * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT64:
+			{
+				leaf->display_value = ((float)leaf->value.i64) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT64:
+			{
+				leaf->display_value = ((float)leaf->value.u64) * leaf->display_scale;
+				break;
+			}
+			default:
+				break;
+		}
+	}
+}
+
 void calculate_display_values(const std::vector<DarttField*> &leaf_list)
 {
 	for(int i = 0; i < leaf_list.size(); i++)
 	{
 		DarttField * leaf = leaf_list[i];
-		if(leaf->subscribed)
-		{
-			switch (leaf->type) 
-			{
-				case FieldType::FLOAT:
-				{
-					leaf->display_value = leaf->value.f32 * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT32:
-				{
-					leaf->display_value = ((float)leaf->value.i32)*leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT32:
-				{
-					leaf->display_value = ((float)leaf->value.u32)*leaf->display_scale;
-					break;
-				}
-				case FieldType::INT16:
-				{
-					leaf->display_value = ((float)leaf->value.i16) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT16:
-				{
-					leaf->display_value = ((float)leaf->value.u16) * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT8:
-				{
-					leaf->display_value = ((float)leaf->value.i8) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT8:
-				{
-					leaf->display_value = ((float)leaf->value.u8) * leaf->display_scale;
-					break;
-				}
-				case FieldType::DOUBLE:
-				{
-					leaf->display_value = (float)leaf->value.f64 * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT64:
-				{
-					leaf->display_value = ((float)leaf->value.i64) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT64:
-				{
-					leaf->display_value = ((float)leaf->value.u64) * leaf->display_scale;
-					break;
-				}
-				default:
-					break;
-			}	
-		}
+		calculate_display_value(leaf);
 	}
 }
 
+/**
+*/
 void float_field_handler(DarttField* field)
 {
 	if(field == NULL)
@@ -825,7 +839,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	return true;
 }
 
-bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl)
+bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl, WavWriter & wav)
 {
     bool any_edited = false;
 
@@ -881,12 +895,16 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 			if (dl.serial.connected())
 			{
 				if (ImGui::Button("Disconnect"))
+				{
 					dl.serial.disconnect();
+				}
 			}
 			else
 			{
 				if (ImGui::Button("Connect"))
+				{
 					dl.serial.autoconnect(baudrate);
+				}
 			}
 			break;
 		}
@@ -965,6 +983,24 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		{
 			config.num_frames = 0;
 			time_start();
+		}
+	}
+
+	ImGui::SameLine();
+	ImGui::Separator();
+	if(!wav.is_open())
+	{
+		if(ImGui::Button("Start"))
+		{
+			wav.open("output.wav");
+		}
+	}
+	else
+	{
+		if(ImGui::Button("Close"))
+		{
+			float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
+			wav.close(fps);
 		}
 	}
 
