@@ -25,3 +25,6 @@
 [submodule "external/libsoundio"]
 	path = external/libsoundio
 	url = https://github.com/andrewrk/libsoundio
+[submodule "external/dartt_audio"]
+	path = external/dartt_audio
+	url = https://github.com/ocanath/dartt_audio
