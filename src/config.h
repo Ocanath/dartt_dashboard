@@ -1,11 +1,13 @@
 #ifndef DARTT_CONFIG_H
 #define DARTT_CONFIG_H
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <cstdint>
 #include "dartt_sync.h"
 #include "dartt.h"
+#include "dartt_link.h"
 #include "plotting.h"
 #include <nlohmann/json.hpp>
 #include "serial.h"
@@ -30,8 +32,23 @@ enum class FieldType {
     UNKNOWN
 };
 
+// Wraps the one non-copyable member so DarttField can stay a plain aggregate.
+// std::atomic<bool> deletes its copy/move special members; isolating it here
+// keeps the boilerplate contained and prevents silent member-omission bugs if
+// DarttField gains new fields later.
+struct DarttFieldState
+{
+    std::atomic<bool> dirty{false};
+
+    DarttFieldState() = default;
+    DarttFieldState(const DarttFieldState& o) : dirty(o.dirty.load()) {}
+    DarttFieldState& operator=(const DarttFieldState& o) { dirty.store(o.dirty.load()); return *this; }
+    DarttFieldState(DarttFieldState&& o) noexcept : dirty(o.dirty.load()) {}
+    DarttFieldState& operator=(DarttFieldState&& o) noexcept { dirty.store(o.dirty.load()); return *this; }
+};
+
 // Single field in the hierarchy
-struct DarttField 
+struct DarttField
 {
     std::string name;
     uint32_t byte_offset;       // absolute from struct base
@@ -49,7 +66,7 @@ struct DarttField
 
     // UI state
     bool subscribed;
-    bool dirty;                 // set when value edited, cleared after write
+    DarttFieldState state;      // holds dirty; separate so DarttField stays a plain aggregate
     float display_scale;
     bool expanded;              // tree node expanded in UI
 
@@ -70,7 +87,6 @@ struct DarttField
         uint64_t u64;
     } value;
 
-    // Default constructor
     DarttField()
         : byte_offset(0)
         , dartt_offset(0)
@@ -79,7 +95,6 @@ struct DarttField
         , array_size(0)
         , element_nbytes(0)
         , subscribed(false)
-        , dirty(false)
         , display_scale(1.0f)
         , expanded(false)
 		, use_display_scale(false)
@@ -99,6 +114,10 @@ struct DarttConfig
     uint32_t nwords;            // total size in 32-bit words
     DarttField root;            // root struct containing all fields
 
+
+	int64_t num_frames;
+	int64_t elapsed_ms;
+
     // DARTT buffers (allocated after parsing)
 	dartt_mem_t ctl_buf;
 	dartt_mem_t periph_buf;
@@ -109,13 +128,17 @@ struct DarttConfig
 	std::vector<DarttField*> leaf_list;
 	std::vector<DarttField*> subscribed_list;  // subscribed leaves only
 	std::vector<DarttField*> dirty_list;       // dirty leaves only
+	bool subscribed_dirty;                     // set by UI when any subscription changes
 	
     DarttConfig()
         : address(0)
         , nbytes(0)
         , nwords(0)
-        , ctl_buf(0)
-        , periph_buf(0)
+        , ctl_buf{}
+        , periph_buf{}
+        , subscribed_dirty(false)
+		, num_frames(0)
+		, elapsed_ms(0)
     {}
 
     ~DarttConfig() {
@@ -151,8 +174,7 @@ struct DarttConfig
 // Parse config from JSON file
 // If plot is provided, also loads plotting config
 // Returns true on success, false on error (error message printed to stderr)
-bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot, Serial & serial, dartt_sync_t& ds);
-
+bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot, Serial & serial, DarttLink & ds);
 
 // Parse plotting config from json, if present.
 void load_plotting_config(const nlohmann::json& j, Plotter& plot, const std::vector<DarttField*>& leaf_list);
@@ -169,7 +191,7 @@ class Plotter;
 // Save config to JSON file (preserves UI settings)
 // If plot is provided, also saves plotting config
 // Returns true on success, false on error (error message printed to stderr)
-bool save_dartt_config(const char* json_path, const DarttConfig& config, const Plotter& plot, Serial & serial, dartt_sync_t& ds);
+bool save_dartt_config(const char* json_path, const DarttConfig& config, const Plotter& plot, DarttLink & dl);
 
 // Helper: get FieldType from type string
 FieldType parse_field_type(const std::string& type_str);

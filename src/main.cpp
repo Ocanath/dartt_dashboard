@@ -34,20 +34,101 @@
 #include "dartt.h"
 #include "dartt_sync.h"
 #include "dartt_crc.h"
+#include "dartt_link.h"
+
 
 // App
 #include "config.h"
-#include "dartt_init.h"
 #include "ui.h"
 #include "buffer_sync.h"
 #include "plotting.h"
 #include "elf_parser.h"
+#include "time_util.h"
 
 #include <algorithm>
+#include <cstring>
 #include <string>
 
+struct ReadCallbackCtx {
+    DarttConfig* config;
+    Plotter*     plot;
+    DarttLink*   dl;
+};
+
+static void on_read_reply(const dartt_mem_t* periph, void* ctx)
+{
+    ReadCallbackCtx* c = (ReadCallbackCtx*)ctx;
+	DarttConfig * config = c->config;
+    {
+        if (c->dl->periph_buf_mutex.try_lock())
+		{
+			std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex, std::adopt_lock);
+			for (int i = 0; i < (int)config->subscribed_list.size(); i++)
+			{
+				DarttField* field = config->subscribed_list[i];
+				if (field->state.dirty)
+					continue;
+				std::memcpy(&field->value.u8,
+							config->periph_buf.buf + field->byte_offset,
+							field->nbytes);
+			}
+			config->num_frames += config->subscribed_list.size();
+			config->elapsed_ms = time_get_ms();
+			calculate_display_values(config->leaf_list);
+		}
+    }
+
+    {
+		/*
+			Prevent read loop starvation.
+			This contends with the slow render() call for access of the shared plot ring buffer.
+			
+			In order to prevent the render from starving the read loop, we will reduce the amount of data which is loaded into the plot buffer and introduce some
+			jitter in the rendered visual by missing some enqueue calls with a try-lock scheme, rather than spinning until access is available.
+		*/
+		if(c->plot->plot_mutex.try_lock()) 	
+		{	
+			std::lock_guard<std::mutex> lock(c->plot->plot_mutex, std::adopt_lock);
+			for (int i = 0; i < (int)c->plot->lines.size(); i++)
+				c->plot->lines[i].enqueue_data(c->plot->window_width);
+		}
+    }
+}
+
+static const char* SETTINGS_FILE = "dartt_dashboard.ini";
+
+static std::string load_last_json_path()
+{
+	std::FILE* f = std::fopen(SETTINGS_FILE, "r");
+	if (!f)
+		return "";
+	char line[1024];
+	std::string result;
+	while (std::fgets(line, sizeof(line), f))
+	{
+		if (std::strncmp(line, "last_json=", 10) == 0)
+		{
+			result = std::string(line + 10);
+			while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+				result.pop_back();
+			break;
+		}
+	}
+	std::fclose(f);
+	return result;
+}
+
+static void save_last_json_path(const std::string& path)
+{
+	std::FILE* f = std::fopen(SETTINGS_FILE, "w");
+	if (!f)
+		return;
+	std::fprintf(f, "last_json=%s\n", path.c_str());
+	std::fclose(f);
+}
+
 // Helper: case-insensitive extension check
-static bool ends_with_ci(const std::string& str, const std::string& suffix) 
+static bool ends_with_ci(const std::string& str, const std::string& suffix)
 {
 	if (suffix.size() > str.size()) 
 	{
@@ -69,8 +150,20 @@ int main(int argc, char* argv[])
 	bool show_elf_popup = false;
 	char var_name_buf[128] = "";
 	std::string elf_load_error;
-	bool pending_json_load = false;
 	std::string config_json_path = "";
+
+	std::string cached_json = load_last_json_path();
+	bool pending_json_load = false;
+	if (!cached_json.empty())
+	{
+		std::FILE* probe = std::fopen(cached_json.c_str(), "r");
+		if (probe)
+		{
+			std::fclose(probe);
+			dropped_file_path = cached_json;
+			pending_json_load = true;
+		}
+	}
 
 	// Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) 
@@ -125,13 +218,7 @@ int main(int argc, char* argv[])
 	SDL_GetWindowSize(window, &width, &height);
 	plot.init(width, height);
 	
-	// Serial connection
-	bool rc = serial.autoconnect(230400);
-	if (rc != true) 
-	{
-		printf("Warning - no serial connection made\n");
-	}
-
+	
 	if (tcs_lib_init() != TCS_SUCCESS)
 	{
 		printf("Failed to initialize tinycsocket\n");
@@ -152,20 +239,13 @@ int main(int argc, char* argv[])
 		config.allocate_buffers();
 	}
 
-	// Setup dartt_sync
-	dartt_sync_t ds;
-	init_ds(&ds);
-	ds.address = 0x0; // TODO: make configurable
+	// Serial connection
+	DarttLink dl(config.ctl_buf, config.periph_buf);
 
-	if (config.ctl_buf.buf && config.periph_buf.buf) 
-	{
-		//shallow copy the buffers
-		ds.ctl_base.buf = config.ctl_buf.buf;
-		ds.ctl_base.size = config.ctl_buf.size;
-		ds.periph_base.buf = config.periph_buf.buf;
-		ds.periph_base.size = config.periph_buf.size;
-	}
+	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl };
+	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
 
+	time_start();	//start time
 	// Main loop
 	bool running = true;
 	while (running)
@@ -213,27 +293,30 @@ int main(int argc, char* argv[])
 		if (pending_json_load)
 		{
 			pending_json_load = false;
+			dl.stop();
 			// Detach external references before replacing config
 			for (size_t i = 0; i < plot.lines.size(); i++)
 			{
 				plot.lines[i].xsource = &plot.sys_sec;
 				plot.lines[i].ysource = nullptr;
 			}
-			ds.ctl_base.buf = nullptr;
-			ds.periph_base.buf = nullptr;
+			dl.ctl_base.buf = nullptr;
+			dl.periph_base.buf = nullptr;
 			config = DarttConfig();
 
-			if (load_dartt_config(dropped_file_path.c_str(), config, plot, serial, ds))
+			if (load_dartt_config(dropped_file_path.c_str(), config, plot, dl.serial, dl))
 			{
 				if (config.nbytes > 0)
 				{
 					config.allocate_buffers();
-					ds.ctl_base.buf = config.ctl_buf.buf;
-					ds.ctl_base.size = config.ctl_buf.size;
-					ds.periph_base.buf = config.periph_buf.buf;
-					ds.periph_base.size = config.periph_buf.size;
+					dl.ctl_base.buf = config.ctl_buf.buf;
+					dl.ctl_base.size = config.ctl_buf.size;
+					dl.periph_base.buf = config.periph_buf.buf;
+					dl.periph_base.size = config.periph_buf.size;
 				}
 				config_json_path = dropped_file_path;
+				save_last_json_path(config_json_path);
+				dl.start();
 				printf("Loaded config from JSON: %s\n", dropped_file_path.c_str());
 			}
 			else
@@ -245,14 +328,15 @@ int main(int argc, char* argv[])
 		// --- Drag-and-drop: ELF popup + load ---
 		if (render_elf_load_popup(&show_elf_popup, dropped_file_path, var_name_buf, sizeof(var_name_buf), elf_load_error))
 		{
+			dl.stop();
 			// User clicked Load - detach external references
 			for (size_t i = 0; i < plot.lines.size(); i++)
 			{
 				plot.lines[i].xsource = &plot.sys_sec;
 				plot.lines[i].ysource = nullptr;
 			}
-			ds.ctl_base.buf = nullptr;
-			ds.periph_base.buf = nullptr;
+			dl.ctl_base.buf = nullptr;
+			dl.periph_base.buf = nullptr;
 			config = DarttConfig();
 
 			elf_parse_error_t err = elf_parser_load_config(dropped_file_path.c_str(), var_name_buf, &config);
@@ -262,10 +346,10 @@ int main(int argc, char* argv[])
 				if (config.nbytes > 0)
 				{
 					config.allocate_buffers();
-					ds.ctl_base.buf = config.ctl_buf.buf;
-					ds.ctl_base.size = config.ctl_buf.size;
-					ds.periph_base.buf = config.periph_buf.buf;
-					ds.periph_base.size = config.periph_buf.size;
+					dl.ctl_base.buf = config.ctl_buf.buf;
+					dl.ctl_base.size = config.ctl_buf.size;
+					dl.periph_base.buf = config.periph_buf.buf;
+					dl.periph_base.size = config.periph_buf.size;
 				}
 				config_json_path = dropped_file_path.substr(0, dropped_file_path.size() - 4) + ".json";
 				elf_parser_ctx tmp_parser;
@@ -276,6 +360,7 @@ int main(int argc, char* argv[])
 				}
 				elf_load_error.clear();
 				ImGui::CloseCurrentPopup();
+				dl.start();
 				printf("Loaded config from ELF: %s (symbol: %s)\n",
 				       dropped_file_path.c_str(), var_name_buf);
 			}
@@ -285,71 +370,71 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// Rebuild subscribed and dirty lists before read/write operations
-		collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+		// dirty_list is main-thread only — no lock needed
 		collect_dirty_fields(config.leaf_list, config.dirty_list);
 
 		// WRITE: Send dirty fields to device
-		if (config.ctl_buf.buf && config.periph_buf.buf) 
+		if (config.ctl_buf.buf && config.periph_buf.buf)
 		{
 			std::vector<MemoryRegion> write_queue = build_write_queue(config);
-			for (MemoryRegion& region : write_queue) {
-				sync_fields_to_ctl_buf(config, region);
-
+			for (int i = 0; i < (int)write_queue.size(); i++)
+			{
+				sync_fields_to_ctl_buf(config, write_queue[i]);
 				dartt_mem_t slice = {
-					.buf = config.ctl_buf.buf + region.start_offset,
-					.size = region.length
+					.buf  = config.ctl_buf.buf + write_queue[i].start_offset,
+					.size = write_queue[i].length
 				};
-
-				int rc = dartt_write_multi(&slice, &ds);
-				if (rc == DARTT_PROTOCOL_SUCCESS) {
-					clear_dirty_flags(region);
-					printf("write ok: offset=%u len=%u\n", region.start_offset, region.length);
-				} else {
+				int rc = dl.enqueue_writes(slice);
+				if (rc == DARTT_PROTOCOL_SUCCESS)
+				{
+					clear_dirty_flags(write_queue[i]);
+					printf("write enqueued: offset=%u len=%u\n", write_queue[i].start_offset, write_queue[i].length);
+				}
+				else
+				{
 					printf("write error %d\n", rc);
 				}
 			}
 		}
 
-		// READ: Poll subscribed fields from device
-		if (config.ctl_buf.buf && config.periph_buf.buf)
-		{
-			std::vector<MemoryRegion> read_queue = build_read_queue(config);
-			for (MemoryRegion& region : read_queue) 
-			{
-				dartt_mem_t slice = 
-				{
-					.buf = config.ctl_buf.buf + region.start_offset,
-					.size = region.length,
-				};
-
-
-				int rc = dartt_read_multi(&slice, &ds);
-				if (rc == DARTT_PROTOCOL_SUCCESS) 
-				{
-					sync_periph_buf_to_fields(config, region);
-				} 
-				else 
-				{
-					printf("read error %d\n", rc);
-				}
-			}
-		}
-		
-		calculate_display_values(config.leaf_list);		
 
 		// Render UI
-		bool value_edited = render_live_expressions(config, plot, config_json_path, serial, ds);
+		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
+		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);
 
-		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);	//map out
-		render_plotting_menu(plot, config.root, config.subscribed_list);
-		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);	//outside of class, load the time in sec as timebase for signals that use it as default
-
-		//add new frame of data to each line, as determined by UI
-		for(int i = 0; i < plot.lines.size(); i++)
 		{
-			plot.lines[i].enqueue_data(plot.window_width);
+			//this lock is a bit of a misnomer - it's protecting display_value, the subscribed list, periph_buf, field.value all in one. 
+			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
+			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
+			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
+			render_live_expressions(config, plot, config_json_path, dl);
+			if (config.subscribed_dirty)
+			{
+				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+			}
 		}
+		if(config.subscribed_dirty)
+		{
+			if (config.ctl_buf.buf && config.periph_buf.buf)
+			{
+				std::vector<MemoryRegion> read_regions = build_read_queue(config);
+				dl.clear_subscriptions();
+				if(dl.streaming_mode == false)
+				{
+					for (int i = 0; i < (int)read_regions.size(); i++)
+					{
+						dartt_mem_t region = {
+							.buf  = config.ctl_buf.buf + read_regions[i].start_offset,
+							.size = read_regions[i].length
+						};
+						dl.subscribe_region(region);
+					}
+				}
+				dl.build_read_requests();
+			}
+		}
+		config.subscribed_dirty = false;	//handled, mark false for next pass
+		render_plotting_menu(plot, config.root, config.subscribed_list);
 		
 
 		// Render
@@ -367,6 +452,8 @@ int main(int argc, char* argv[])
 
 	// Save UI settings back to config
 	// save_dartt_config("config.json", config);
+
+	dl.stop();
 
 	// Cleanup
 	shutdown_imgui();

@@ -4,7 +4,6 @@
 #endif
 #include <GL/gl.h>
 #include <vector>
-#include <algorithm>
 #include "plotting.h"
 
 // fpoint_t definition
@@ -33,7 +32,10 @@ Line::Line()
 	, yscale(1.f)
 	, yoffset(0.f)
 	, enqueue_cap(2000)
+	, head_(0)
+	, count_(0)
 {
+	points.resize(enqueue_cap);
 	color.r = 0;
 	color.g = 0;
 	color.b = 0;
@@ -41,7 +43,7 @@ Line::Line()
 }
 
 Line::Line(int capacity)
-	: points(capacity)
+	: points()
 	, color()
 	, xsource(NULL)
 	, ysource(NULL)
@@ -50,8 +52,11 @@ Line::Line(int capacity)
 	, xoffset(0.f)
 	, yscale(1.f)
 	, yoffset(0.f)
-	, enqueue_cap(2000)
+	, enqueue_cap((uint32_t)capacity)
+	, head_(0)
+	, count_(0)
 {
+	points.resize(enqueue_cap);
 	color.r = 0;
 	color.g = 0;
 	color.b = 0;
@@ -81,8 +86,6 @@ bool Plotter::init(int width, int height)
 
 	// Initialize with one line
 	lines.resize(1);
-	lines[0].points.resize(line_capacity);
-	lines[0].points.clear();
 	lines[0].xsource = &sys_sec;
 	int color_idx = (lines.size() % NUM_COLORS);
 	lines[0].color = template_colors[color_idx];
@@ -104,6 +107,7 @@ int sat_pix_to_window(int val, int thresh)
 
 void Plotter::render()
 {
+	std::lock_guard<std::mutex> lock(plot_mutex);
 	// Save current matrix state
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
@@ -118,28 +122,34 @@ void Plotter::render()
 	for (int i = 0; i < (int)lines.size(); i++)
 	{
 		Line* line = &lines[i];
-		int num_points = line->points.size();
+		size_t num_points = line->count_;
 
 		if (num_points < 2)
 		{
 			continue;
 		}
-
-		glColor4ub(line->color.r, line->color.g, line->color.b, line->color.a);	
-		glBegin(GL_LINE_STRIP);
-		for (int j = 0; j < num_points; j++)
+		else if(num_points > line->points.size())
 		{
-			int x = 0; 
+			continue;	//this would cause a segfault. also functions as a .size() = 0 guard for the modulo op
+		}
+
+		fpoint_t& oldest = line->points[line->head_];
+		glColor4ub(line->color.r, line->color.g, line->color.b, line->color.a);
+		glBegin(GL_LINE_STRIP);
+		for (size_t j = 0; j < num_points; j++)
+		{
+			fpoint_t& pt = line->points[(line->head_ + j) % line->points.size()];
+			int x = 0;
 			int y = 0;
-			if(line->mode == TIME_MODE)
+			if (line->mode == TIME_MODE)
 			{
-				x = (int)( (line->points[j].x - line->points.front().x) * line->xscale);
-				y = (int)(line->points[j].y * line->yscale + line->yoffset + (float)window_height/2.f);	
+				x = (int)((pt.x - oldest.x) * line->xscale);
+				y = (int)(pt.y * line->yscale + line->yoffset + (float)window_height / 2.f);
 			}
 			else
 			{
-				x = (int)(line->points[j].x * line->xscale + line->xoffset + (float)window_width/2.f);
-				y = (int)(line->points[j].y * line->yscale + line->yoffset + (float)window_height/2.f);
+				x = (int)(pt.x * line->xscale + line->xoffset + (float)window_width / 2.f);
+				y = (int)(pt.y * line->yscale + line->yoffset + (float)window_height / 2.f);
 			}
 			x = sat_pix_to_window(x, window_width);
 			y = sat_pix_to_window(y, window_width);
@@ -155,7 +165,12 @@ void Plotter::render()
 	glPopMatrix();
 }
 
-
+void Line::clear()
+{
+	head_ = 0;
+	count_ = 0;
+	points.clear();
+}
 
 bool Line::enqueue_data(int screen_width)
 {
@@ -163,36 +178,40 @@ bool Line::enqueue_data(int screen_width)
 	{
 		return false;	//fail due to bad pointer reference
 	}
-	//enqueue data
-	if(points.size() < enqueue_cap)	//cap on buffer width - may want to expand
-	{
-		points.push_back(fpoint_t(*xsource, *ysource));
-	}	
-	else if(points.size() > enqueue_cap)
+	if (points.size() != enqueue_cap)
 	{
 		points.resize(enqueue_cap);
+		head_ = 0;
+		count_ = 0;
 	}
-	if(points.size() == enqueue_cap)
+	if(enqueue_cap == 0)
 	{
-		std::rotate(points.begin(), points.begin() + 1, points.end());
-		points.back() = fpoint_t(*xsource, *ysource);
+		return false;	//guard mod zero which is a fault
 	}
+	size_t tail = (head_ + count_) % enqueue_cap;
+	points[tail] = fpoint_t(*xsource, *ysource);
+	if (count_ < enqueue_cap)
+		count_++;
+	else
+		head_ = (head_ + 1) % enqueue_cap;
 
 	if(mode == TIME_MODE)
 	{
-		//THEN calculate xscale based on current buffer state
-		if(points.size() >= 2)
+		if(count_ >= 2)
 		{
-			float div = points.back().x - points.front().x;
+			fpoint_t& oldest = points[head_];
+			fpoint_t& newest = points[(head_ + count_ - 1) % enqueue_cap];
+			float div = newest.x - oldest.x;
 			if(div > 0)
 			{
-				xscale = screen_width/div;
+				xscale = screen_width / div;
 			}
-			else if(div < 0) //decreasing time
+			else if(div < 0)
 			{
-				points.clear();	//this just sets size=0 - can preallocate and clear for speed
-			}	
-		}	
+				head_ = 0;
+				count_ = 0;
+			}
+		}
 	}
 	return true;
 }

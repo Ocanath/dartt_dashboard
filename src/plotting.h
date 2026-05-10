@@ -1,6 +1,7 @@
 #ifndef PLOTTING_H
 #define PLOTTING_H
 
+#include <mutex>
 #include <vector>
 #include <cstdint>
 #include "colors.h"
@@ -23,7 +24,7 @@ public:
 	std::vector<fpoint_t> points;
 	rgb_t color;
 
-
+	
 
 	float * xsource;	//pointer to the x variable which we source for our data stream
 	float * ysource;	//pointer to the y variable which we source for our data stream
@@ -43,14 +44,15 @@ public:
 	float yscale;	//scale the display_ value by one additional scalar  for plotting
 	float yoffset;
 
-	//queue size
 	uint32_t enqueue_cap;
+	size_t   head_;   // index of oldest sample
+	size_t   count_;  // number of valid samples
 
 	Line();
 	Line(int capacity);
 
 	bool enqueue_data(int screen_width);
-	
+	void clear();
 };
 
 class Plotter
@@ -68,6 +70,8 @@ public:
 	bool init(int width, int height);
 
 	float sys_sec;	//global time
+
+	std::mutex plot_mutex;
 
 	// Render all lines directly to OpenGL framebuffer
 	void render();
