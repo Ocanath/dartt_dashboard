@@ -49,6 +49,8 @@
 #include <cstring>
 #include <string>
 #include "wav_writer.h"
+#include "AudioWriter.h"
+
 
 struct ReadCallbackCtx {
     DarttConfig* config;

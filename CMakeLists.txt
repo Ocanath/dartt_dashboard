@@ -58,6 +58,9 @@ add_subdirectory(external/libdwarf)
 # dartt_reader (provides: dartt_reader)
 add_subdirectory(src/reader)
 
+# dartt audio
+add_subdirectory(external/dartt_audio)
+
 # ============================================================================
 # Main Application
 # ============================================================================
@@ -122,6 +125,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME}
     imgui
+	bytestream
+	dartt_audio
     dartt_link
     cobs
     PPP
