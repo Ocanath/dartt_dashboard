@@ -93,6 +93,8 @@ public:
     UdpState     udp;
     TcpState     tcp;
 
+	payload_layer_msg_t pld;
+
 private:
 
 
