@@ -337,6 +337,7 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 		dl.address = ser_settings.value("dartt_serial_address", 0);
 		dl.base_offset = ser_settings.value("dartt_blob_base_offset", 0);
 		uint32_t baudrate = ser_settings.value("baudrate", 921600);
+		dl.msg_type = ser_settings.value("frame_format", TYPE_SERIAL_MESSAGE);
 		if(baudrate != serial.get_baud_rate())
 		{
 			printf("Disconnecting serial...\n");
@@ -400,7 +401,7 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 
     // Load plotting config if plotter provided
 	load_plotting_config(j, plot, config.leaf_list);
-
+	config.subscribed_dirty = true;	//mark true so the subscribe list gets rebuilt
     return true;
 }
 
@@ -411,6 +412,7 @@ void save_serial_settings(json & j, DarttLink & dl)
 	serial_settings["dartt_blob_base_offset"] = dl.base_offset;
 	serial_settings["baudrate"] = dl.serial.get_baud_rate();
 	serial_settings["comm_mode"] = (int)dl.comm_mode;
+	serial_settings["frame_format"] = (int)dl.msg_type;
 	serial_settings["udp_ip"] = std::string(udp_state.ip);
 	serial_settings["udp_port"] = udp_state.port;
 	serial_settings["tcp_ip"] = std::string(tcp_state.ip);
@@ -433,10 +435,10 @@ void save_plotting_config(json& j, const Plotter& plot, const std::vector<DarttF
 
         // X source data
         json xsource_data;
-        if (line.xsource == &plot.sys_usec)
+        if (line.xsource == &plot.sys_sec)
         {
             xsource_data["byte_offset"] = -1;
-            xsource_data["name"] = "sys_usec";
+            xsource_data["name"] = "sys_sec";
         }
         else if (line.xsource == nullptr)
         {
@@ -616,9 +618,9 @@ void load_plotting_config(const json& j, Plotter& plot, const std::vector<DarttF
             int32_t offset = xdata.value("byte_offset", -2);
             std::string name = xdata.value("name", "none");
 
-            if (offset == -1 && name == "sys_usec")
+            if (offset == -1 && name == "sys_sec")
             {
-                line.xsource = &plot.sys_usec;
+                line.xsource = &plot.sys_sec;
             }
             else if (offset == -2 || name == "none")
             {
@@ -633,15 +635,15 @@ void load_plotting_config(const json& j, Plotter& plot, const std::vector<DarttF
                 }
                 else
                 {
-                    printf("Warning: Could not find xsource field '%s' at offset %d, defaulting to sys_usec\n",
+                    printf("Warning: Could not find xsource field '%s' at offset %d, defaulting to sys_sec\n",
                            name.c_str(), offset);
-                    line.xsource = &plot.sys_usec;
+                    line.xsource = &plot.sys_sec;
                 }
             }
         }
         else
         {
-            line.xsource = &plot.sys_usec;
+            line.xsource = &plot.sys_sec;
         }
 
         // Y source

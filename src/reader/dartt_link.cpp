@@ -3,17 +3,17 @@
 #include <cstring>
 
 
-DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph)
+DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_type_t msgtype)
 {
 	ctl_base = ctl;	//shallow copies, alias these
 	periph_base = periph;
 	cobs_enc_ = { enc_mem_, sizeof(enc_mem_), 0, COBS_ENCODED };
     cobs_dec_ = { dec_mem_, sizeof(dec_mem_), 0, COBS_DECODED };
-	msg_type = TYPE_SERIAL_MESSAGE;
+	msg_type = msgtype;
 	address = 0;
 	base_offset = 0;
-	msg_type = TYPE_SERIAL_MESSAGE;
 	comm_mode = COMM_SERIAL;
+	pld = {};
 }
 
 DarttLink::~DarttLink()
@@ -443,6 +443,7 @@ void DarttLink::build_read_requests()
 {
 	std::lock_guard<std::mutex> lock(read_request_mutex_);
 	read_request_list_.clear();
+	read_request_index_ = 0;	//must clear this to avoid an out of bounds access if the list size shrinks
 	for(dartt_mem_t region : subscribed_regions_)
 	{
 		enqueue_read_requests(region);
@@ -493,7 +494,7 @@ int DarttLink::process_frame()
         cobs_dec_.length
     };
 
-    payload_layer_msg_t pld{};
+    pld = {};
     uint8_t pld_buf[DARTT_LINK_BUF_SIZE];
     dartt_buffer_t pld_msg_buf = { pld_buf, sizeof(pld_buf), 0 };
     pld.msg = pld_msg_buf;
@@ -509,8 +510,7 @@ int DarttLink::process_frame()
         return DARTT_ERROR_MALFORMED_MESSAGE;
 	}
 
-    uint16_t index_field = (uint16_t)pld.msg.buf[0] | ((uint16_t)pld.msg.buf[1] << 8);
-    if ((index_field & READ_WRITE_BITMASK) != 0)
+    if (pld.rw_bit != 0)	//must be receiving a write message
 	{
 		return DARTT_ERROR_MALFORMED_MESSAGE;
 	}
@@ -524,8 +524,8 @@ int DarttLink::process_frame()
     // length check without needing the original outgoing request on hand.
     misc_read_message_t synthetic_req{};
     synthetic_req.address   = pld.address;
-    synthetic_req.index     = index_field & ~READ_WRITE_BITMASK;
-    synthetic_req.num_bytes = (uint16_t)(pld.msg.len - NUM_BYTES_READ_REPLY_OVERHEAD_PLD);
+    synthetic_req.index     = pld.index_arg;
+    synthetic_req.num_bytes = pld.msg.len;
 
     {
         std::lock_guard<std::mutex> lock(periph_buf_mutex);
@@ -552,7 +552,9 @@ void DarttLink::dispatch_read_requests(std::unique_lock<std::mutex>& bus_lock)
     {
         std::lock_guard<std::mutex> q_lock(tx_queue_mutex_);
         if (!tx_queue_.empty())
+        {
             return;
+        }
     }
 
     std::lock_guard<std::mutex> rr_lock(read_request_mutex_);

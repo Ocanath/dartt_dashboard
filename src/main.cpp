@@ -43,75 +43,58 @@
 #include "buffer_sync.h"
 #include "plotting.h"
 #include "elf_parser.h"
-
 #include "time_util.h"
+
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include "wav_writer.h"
 
 struct ReadCallbackCtx {
     DarttConfig* config;
     Plotter*     plot;
     DarttLink*   dl;
+	WavWriter * wav_writer;
 };
 
 static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 {
     ReadCallbackCtx* c = (ReadCallbackCtx*)ctx;
-
+	DarttConfig * config = c->config;
     {
-        std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex);
-        for (int i = 0; i < (int)c->config->subscribed_list.size(); i++)
-        {
-            DarttField* field = c->config->subscribed_list[i];
-            std::memcpy(&field->value.u8,
-                        c->config->periph_buf.buf + field->byte_offset,
-                        field->nbytes);
-        }
-
-		// int32_t audio_v = *((int32_t*)(&c->config->periph_buf.buf[72*4]));
-		// printf("%d\n", audio_v);
-
-        calculate_display_values(c->config->leaf_list);
-    }
-
-	int64_t t_us = time_get_us();
-    c->plot->sys_usec = (float)t_us;
-
-	int64_t dif = t_us - c->plot->prev_time_us;
-	if(c->plot->prev_time_us != 0 && dif != 0)
-	{
-		c->plot->count++;
-		c->plot->sum_tdif += dif;
-		c->plot->avg_sampling_freq = ((float)(c->plot->count)) / ((float)(c->plot->sum_tdif)) * 1e6;
-	}
-	c->plot->prev_time_us = t_us;
-
-    // WAV capture — independent of plot_mutex, always fires
-    if (c->plot->wav_writer.is_open())
-    {
-        float sum = 0.f;
-        for (int i = 0; i < (int)c->plot->lines.size(); i++)
-        {
-            Line& line = c->plot->lines[i];
-            if (line.audio_subscribe && line.ysource != nullptr)
-            {
- 				// sum += (*line.ysource) * line.yscale + line.yoffset;
-				float value = (*line.ysource) * line.yscale + line.yoffset;
-				float half_height = c->plot->window_height/2;
-				if(value > half_height)
+        if (c->dl->periph_buf_mutex.try_lock())
+		{
+			std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex, std::adopt_lock);
+			size_t first_updated_bidx = c->dl->pld.index_arg*sizeof(int32_t);
+			size_t last_updated_bidx = first_updated_bidx + c->dl->pld.msg.len;
+			int64_t nframes_updated=0;
+			for (int i = 0; i < (int)config->subscribed_list.size(); i++)
+			{
+				DarttField* field = config->subscribed_list[i];
+				if(field->byte_offset >= first_updated_bidx && field->byte_offset < last_updated_bidx)
 				{
-					value = half_height;
+					if (field->state.dirty)
+					{
+						continue;
+					}
+					std::memcpy(&field->value.u8,
+								config->periph_buf.buf + field->byte_offset,
+								field->nbytes);
+					nframes_updated++;
+					calculate_display_value(field);
+
+					if(c->wav_writer->is_open())
+					{
+						//can inject stuff here
+						float v = field->display_value/32767.f;
+						c->wav_writer->write_sample(v*100);
+					}
 				}
-				else if(value < -half_height)
-				{
-					value = -half_height;
-				}
-				value = value/half_height;
-				sum += value;
 			}
-        }
-        c->plot->wav_writer.write_sample(sum);
+			config->num_frames += nframes_updated;
+			config->elapsed_ms = time_get_ms();
+			// calculate_display_values(config->leaf_list);
+		}
     }
 
     {
@@ -122,13 +105,12 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 			In order to prevent the render from starving the read loop, we will reduce the amount of data which is loaded into the plot buffer and introduce some
 			jitter in the rendered visual by missing some enqueue calls with a try-lock scheme, rather than spinning until access is available.
 		*/
-		if(!c->plot->plot_mutex.try_lock()) 	
-		{
-			return;
+		if(c->plot->plot_mutex.try_lock()) 	
+		{	
+			std::lock_guard<std::mutex> lock(c->plot->plot_mutex, std::adopt_lock);
+			for (int i = 0; i < (int)c->plot->lines.size(); i++)
+				c->plot->lines[i].enqueue_data(c->plot->window_width);
 		}
-		std::lock_guard<std::mutex> lock(c->plot->plot_mutex, std::adopt_lock);
-        for (int i = 0; i < (int)c->plot->lines.size(); i++)
-            c->plot->lines[i].enqueue_data(c->plot->window_width);
     }
 }
 
@@ -201,8 +183,6 @@ int main(int argc, char* argv[])
 			pending_json_load = true;
 		}
 	}
-
-	time_start();
 
 	// Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) 
@@ -280,10 +260,11 @@ int main(int argc, char* argv[])
 
 	// Serial connection
 	DarttLink dl(config.ctl_buf, config.periph_buf);
-
-	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl };
+	WavWriter wav_writer;
+	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl, &wav_writer};
 	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
 
+	time_start();	//start time
 	// Main loop
 	bool running = true;
 	while (running)
@@ -335,7 +316,7 @@ int main(int argc, char* argv[])
 			// Detach external references before replacing config
 			for (size_t i = 0; i < plot.lines.size(); i++)
 			{
-				plot.lines[i].xsource = &plot.sys_usec;
+				plot.lines[i].xsource = &plot.sys_sec;
 				plot.lines[i].ysource = nullptr;
 			}
 			dl.ctl_base.buf = nullptr;
@@ -370,7 +351,7 @@ int main(int argc, char* argv[])
 			// User clicked Load - detach external references
 			for (size_t i = 0; i < plot.lines.size(); i++)
 			{
-				plot.lines[i].xsource = &plot.sys_usec;
+				plot.lines[i].xsource = &plot.sys_sec;
 				plot.lines[i].ysource = nullptr;
 			}
 			dl.ctl_base.buf = nullptr;
@@ -408,8 +389,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// Rebuild subscribed and dirty lists before read/write operations
-		collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+		// dirty_list is main-thread only — no lock needed
 		collect_dirty_fields(config.leaf_list, config.dirty_list);
 
 		// WRITE: Send dirty fields to device
@@ -436,21 +416,30 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// SUBSCRIBE: Rebuild DarttLink read request list when subscriptions or mode change
-		static std::vector<DarttField*> prev_subscribed;
-		static bool prev_streaming_mode = false;
-		if (config.ctl_buf.buf && config.periph_buf.buf)
+
+		// Render UI
+		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
+		plot.sys_sec = (float)(((double)SDL_GetTicks64())/1000.);
+
 		{
-			bool dirty = (config.subscribed_list != prev_subscribed)
-			          || (dl.streaming_mode != prev_streaming_mode);
-			if (dirty)
+			//this lock is a bit of a misnomer - it's protecting display_value, the subscribed list, periph_buf, field.value all in one. 
+			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
+			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
+			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
+			render_live_expressions(config, plot, config_json_path, dl, wav_writer);
+			if (config.subscribed_dirty)
 			{
-				prev_subscribed     = config.subscribed_list;
-				prev_streaming_mode = dl.streaming_mode;
+				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+			}
+		}
+		if(config.subscribed_dirty)
+		{
+			if (config.ctl_buf.buf && config.periph_buf.buf)
+			{
+				std::vector<MemoryRegion> read_regions = build_read_queue(config);
 				dl.clear_subscriptions();
-				if (!dl.streaming_mode)
+				if(dl.streaming_mode == false)
 				{
-					std::vector<MemoryRegion> read_regions = build_read_queue(config);
 					for (int i = 0; i < (int)read_regions.size(); i++)
 					{
 						dartt_mem_t region = {
@@ -460,18 +449,11 @@ int main(int argc, char* argv[])
 						dl.subscribe_region(region);
 					}
 				}
-				dl.build_read_requests();  // builds empty list in streaming mode
+				dl.build_read_requests();
 			}
 		}
-
-		// Render UI
-		SDL_GetWindowSize(window, &plot.window_width, &plot.window_height);
-		{
-			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);
-			bool value_edited = render_live_expressions(config, plot, config_json_path, dl);
-			(void)value_edited;
-			render_plotting_menu(plot, config.root, config.subscribed_list);
-		}
+		config.subscribed_dirty = false;	//handled, mark false for next pass
+		render_plotting_menu(plot, config.root, config.subscribed_list);
 		
 
 		// Render

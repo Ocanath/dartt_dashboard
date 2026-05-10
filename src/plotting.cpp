@@ -69,7 +69,7 @@ Plotter::Plotter()
 	, window_height(0)
 	, num_widths(1)
 	, lines()
-	, sys_usec(0.0f)
+	, sys_sec(0.0f)
 {
 }
 
@@ -86,7 +86,7 @@ bool Plotter::init(int width, int height)
 
 	// Initialize with one line
 	lines.resize(1);
-	lines[0].xsource = &sys_usec;
+	lines[0].xsource = &sys_sec;
 	int color_idx = (lines.size() % NUM_COLORS);
 	lines[0].color = template_colors[color_idx];
 	return true;
@@ -128,13 +128,17 @@ void Plotter::render()
 		{
 			continue;
 		}
+		else if(num_points > line->points.size())
+		{
+			continue;	//this would cause a segfault. also functions as a .size() = 0 guard for the modulo op
+		}
 
 		fpoint_t& oldest = line->points[line->head_];
 		glColor4ub(line->color.r, line->color.g, line->color.b, line->color.a);
 		glBegin(GL_LINE_STRIP);
 		for (size_t j = 0; j < num_points; j++)
 		{
-			fpoint_t& pt = line->points[(line->head_ + j) % line->enqueue_cap];
+			fpoint_t& pt = line->points[(line->head_ + j) % line->points.size()];
 			int x = 0;
 			int y = 0;
 			if (line->mode == TIME_MODE)
@@ -148,7 +152,7 @@ void Plotter::render()
 				y = (int)(pt.y * line->yscale + line->yoffset + (float)window_height / 2.f);
 			}
 			x = sat_pix_to_window(x, window_width);
-			y = sat_pix_to_window(y, window_height);
+			y = sat_pix_to_window(y, window_width);
 			glVertex2f(x, y);
 		}
 		glEnd();
@@ -161,7 +165,12 @@ void Plotter::render()
 	glPopMatrix();
 }
 
-
+void Line::clear()
+{
+	head_ = 0;
+	count_ = 0;
+	points.clear();
+}
 
 bool Line::enqueue_data(int screen_width)
 {
@@ -174,6 +183,10 @@ bool Line::enqueue_data(int screen_width)
 		points.resize(enqueue_cap);
 		head_ = 0;
 		count_ = 0;
+	}
+	if(enqueue_cap == 0)
+	{
+		return false;	//guard mod zero which is a fault
 	}
 	size_t tail = (head_ + count_) % enqueue_cap;
 	points[tail] = fpoint_t(*xsource, *ysource);

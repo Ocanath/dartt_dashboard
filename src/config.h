@@ -1,6 +1,7 @@
 #ifndef DARTT_CONFIG_H
 #define DARTT_CONFIG_H
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -31,8 +32,23 @@ enum class FieldType {
     UNKNOWN
 };
 
+// Wraps the one non-copyable member so DarttField can stay a plain aggregate.
+// std::atomic<bool> deletes its copy/move special members; isolating it here
+// keeps the boilerplate contained and prevents silent member-omission bugs if
+// DarttField gains new fields later.
+struct DarttFieldState
+{
+    std::atomic<bool> dirty{false};
+
+    DarttFieldState() = default;
+    DarttFieldState(const DarttFieldState& o) : dirty(o.dirty.load()) {}
+    DarttFieldState& operator=(const DarttFieldState& o) { dirty.store(o.dirty.load()); return *this; }
+    DarttFieldState(DarttFieldState&& o) noexcept : dirty(o.dirty.load()) {}
+    DarttFieldState& operator=(DarttFieldState&& o) noexcept { dirty.store(o.dirty.load()); return *this; }
+};
+
 // Single field in the hierarchy
-struct DarttField 
+struct DarttField
 {
     std::string name;
     uint32_t byte_offset;       // absolute from struct base
@@ -50,7 +66,7 @@ struct DarttField
 
     // UI state
     bool subscribed;
-    bool dirty;                 // set when value edited, cleared after write
+    DarttFieldState state;      // holds dirty; separate so DarttField stays a plain aggregate
     float display_scale;
     bool expanded;              // tree node expanded in UI
 
@@ -71,7 +87,6 @@ struct DarttField
         uint64_t u64;
     } value;
 
-    // Default constructor
     DarttField()
         : byte_offset(0)
         , dartt_offset(0)
@@ -80,7 +95,6 @@ struct DarttField
         , array_size(0)
         , element_nbytes(0)
         , subscribed(false)
-        , dirty(false)
         , display_scale(1.0f)
         , expanded(false)
 		, use_display_scale(false)
@@ -100,6 +114,10 @@ struct DarttConfig
     uint32_t nwords;            // total size in 32-bit words
     DarttField root;            // root struct containing all fields
 
+
+	int64_t num_frames;
+	int64_t elapsed_ms;
+
     // DARTT buffers (allocated after parsing)
 	dartt_mem_t ctl_buf;
 	dartt_mem_t periph_buf;
@@ -110,6 +128,7 @@ struct DarttConfig
 	std::vector<DarttField*> leaf_list;
 	std::vector<DarttField*> subscribed_list;  // subscribed leaves only
 	std::vector<DarttField*> dirty_list;       // dirty leaves only
+	bool subscribed_dirty;                     // set by UI when any subscription changes
 	
     DarttConfig()
         : address(0)
@@ -117,6 +136,9 @@ struct DarttConfig
         , nwords(0)
         , ctl_buf{}
         , periph_buf{}
+        , subscribed_dirty(false)
+		, num_frames(0)
+		, elapsed_ms(0)
     {}
 
     ~DarttConfig() {

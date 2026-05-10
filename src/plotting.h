@@ -5,7 +5,6 @@
 #include <vector>
 #include <cstdint>
 #include "colors.h"
-#include "wav_writer.h"
 
 struct fpoint_t
 {
@@ -25,7 +24,7 @@ public:
 	std::vector<fpoint_t> points;
 	rgb_t color;
 
-
+	
 
 	float * xsource;	//pointer to the x variable which we source for our data stream
 	float * ysource;	//pointer to the y variable which we source for our data stream
@@ -49,13 +48,11 @@ public:
 	size_t   head_;   // index of oldest sample
 	size_t   count_;  // number of valid samples
 
-	bool audio_subscribe = false;
-
 	Line();
 	Line(int capacity);
 
 	bool enqueue_data(int screen_width);
-	
+	void clear();
 };
 
 class Plotter
@@ -72,21 +69,12 @@ public:
 	// Initialize the plotter with dimensions and number of widths for buffer
 	bool init(int width, int height);
 
-	float sys_usec;	//global time
-
-	//sampling
-	float avg_sampling_freq = 0;
-	int64_t sum_tdif = 0;
-	int64_t prev_time_us = 0;
-	uint64_t count = 0;
+	float sys_sec;	//global time
 
 	std::mutex plot_mutex;
 
-	WavWriter wav_writer;
-
 	// Render all lines directly to OpenGL framebuffer
 	void render();
-
 };
 
 #endif // PLOTTING_H

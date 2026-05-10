@@ -8,7 +8,7 @@
 #include <string>
 #include "colors.h"
 #include "dartt_link.h"
-
+#include "time_util.h"
 
 bool init_imgui(SDL_Window* window, SDL_GLContext gl_context) 
 {
@@ -109,72 +109,86 @@ struct RenderWork
     bool is_tree_pop;  // true = just call TreePop(), no rendering
 };
 
+/** @brief single dartt field display value helper
+ * @param input pointer to leaf
+ */
+void calculate_display_value(DarttField * leaf)
+{
+	if(leaf == NULL)
+	{
+		return;
+	}
+	if(leaf->subscribed)
+	{
+		switch (leaf->type) 
+		{
+			case FieldType::FLOAT:
+			{
+				leaf->display_value = leaf->value.f32 * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT32:
+			{
+				leaf->display_value = ((float)leaf->value.i32)*leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT32:
+			{
+				leaf->display_value = ((float)leaf->value.u32)*leaf->display_scale;
+				break;
+			}
+			case FieldType::INT16:
+			{
+				leaf->display_value = ((float)leaf->value.i16) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT16:
+			{
+				leaf->display_value = ((float)leaf->value.u16) * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT8:
+			{
+				leaf->display_value = ((float)leaf->value.i8) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT8:
+			{
+				leaf->display_value = ((float)leaf->value.u8) * leaf->display_scale;
+				break;
+			}
+			case FieldType::DOUBLE:
+			{
+				leaf->display_value = (float)leaf->value.f64 * leaf->display_scale;
+				break;
+			}
+			case FieldType::INT64:
+			{
+				leaf->display_value = ((float)leaf->value.i64) * leaf->display_scale;
+				break;
+			}
+			case FieldType::UINT64:
+			{
+				leaf->display_value = ((float)leaf->value.u64) * leaf->display_scale;
+				break;
+			}
+			default:
+				break;
+		}
+	}
+}
+
 void calculate_display_values(const std::vector<DarttField*> &leaf_list)
 {
 	for(int i = 0; i < leaf_list.size(); i++)
 	{
 		DarttField * leaf = leaf_list[i];
-		if(leaf->subscribed)
-		{
-			switch (leaf->type) 
-			{
-				case FieldType::FLOAT:
-				{
-					leaf->display_value = leaf->value.f32 * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT32:
-				{
-					leaf->display_value = ((float)leaf->value.i32)*leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT32:
-				{
-					leaf->display_value = ((float)leaf->value.u32)*leaf->display_scale;
-					break;
-				}
-				case FieldType::INT16:
-				{
-					leaf->display_value = ((float)leaf->value.i16) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT16:
-				{
-					leaf->display_value = ((float)leaf->value.u16) * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT8:
-				{
-					leaf->display_value = ((float)leaf->value.i8) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT8:
-				{
-					leaf->display_value = ((float)leaf->value.u8) * leaf->display_scale;
-					break;
-				}
-				case FieldType::DOUBLE:
-				{
-					leaf->display_value = (float)leaf->value.f64 * leaf->display_scale;
-					break;
-				}
-				case FieldType::INT64:
-				{
-					leaf->display_value = ((float)leaf->value.i64) * leaf->display_scale;
-					break;
-				}
-				case FieldType::UINT64:
-				{
-					leaf->display_value = ((float)leaf->value.u64) * leaf->display_scale;
-					break;
-				}
-				default:
-					break;
-			}	
-		}
+		calculate_display_value(leaf);
 	}
 }
 
+/**
+*/
 void float_field_handler(DarttField* field)
 {
 	if(field == NULL)
@@ -184,14 +198,14 @@ void float_field_handler(DarttField* field)
 	if (field->use_display_scale == false)
 	{
 		ImGui::InputFloat("##val", &field->value.f32, 0, 0, "%f");
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.f32 = (float)(field->display_value / field->display_scale);
 		}
 	}
@@ -207,14 +221,14 @@ void int32_field_handler(DarttField * field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S32, &field->value.i32, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit(); 
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit(); 
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) 
 		{ 
-			field->dirty = true; 
+			field->state.dirty = true; 
 			field->value.i32 = (int32_t)(field->display_value/field->display_scale);
 		}
 	}
@@ -225,14 +239,14 @@ void uint32_field_handler(DarttField * field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U32, &field->value.u32, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit(); 
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit(); 
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit()) 
 		{ 
-			field->dirty = true; 
+			field->state.dirty = true; 
 			field->value.i32 = (uint32_t)(field->display_value/field->display_scale);
 		}
 	}
@@ -244,14 +258,14 @@ void int16_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S16, &field->value.i16, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i16 = (int16_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -262,14 +276,14 @@ void uint16_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U16, &field->value.u16, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u16 = (uint16_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -280,14 +294,14 @@ void int8_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S8, &field->value.i8, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i8 = (int8_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -298,14 +312,14 @@ void uint8_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U8, &field->value.u8, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u8 = (uint8_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -316,14 +330,14 @@ void double_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputDouble("##val", &field->value.f64, 0, 0, "%f");
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.f64 = (double)(field->display_value / field->display_scale);
 		}
 	}
@@ -334,14 +348,14 @@ void int64_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_S64, &field->value.i64, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.i64 = (int64_t)(field->display_value / field->display_scale);
 		}
 	}
@@ -352,21 +366,21 @@ void uint64_field_handler(DarttField* field)
 	if(field->use_display_scale == false)
 	{
 		ImGui::InputScalar("##val", ImGuiDataType_U64, &field->value.u64, 0, 0);
-		field->dirty = ImGui::IsItemDeactivatedAfterEdit();
+		field->state.dirty = ImGui::IsItemDeactivatedAfterEdit();
 	}
 	else
 	{
 		ImGui::InputScalar("###val", ImGuiDataType_Float, &field->display_value, 0, 0, "%f");
 		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			field->dirty = true;
+			field->state.dirty = true;
 			field->value.u64 = (uint64_t)(field->display_value / field->display_scale);
 		}
 	}
 }
 
 // Render a single field's row (called from iterative loop)
-static bool render_single_field(DarttField* field, bool show_display_props) 
+static bool render_single_field(DarttField* field, bool show_display_props, bool& sub_changed)
 {
     bool is_leaf = field->children.empty();
 
@@ -493,6 +507,7 @@ static bool render_single_field(DarttField* field, bool show_display_props)
         if (ImGui::Checkbox("##sub", &sub_state)) {
             // Toggle: if was mixed or off, turn all on; if all on, turn all off
             set_subscribed_all(field, !all_sub);
+            sub_changed = true;
         }
 
         if (any_sub && !all_sub) {
@@ -501,9 +516,9 @@ static bool render_single_field(DarttField* field, bool show_display_props)
     } 
 	else 
 	{
-        if (ImGui::Checkbox("##sub", &field->subscribed)) 
+        if (ImGui::Checkbox("##sub", &field->subscribed))
 		{
-            // Individual leaf subscription changed
+            sub_changed = true;
         }
     }
 
@@ -518,11 +533,11 @@ static bool render_single_field(DarttField* field, bool show_display_props)
 
     ImGui::PopID();
 
-    return field->dirty;
+    return field->state.dirty;
 }
 
 // Render field tree iteratively, returns true if any value was edited
-static bool render_field_tree(DarttField* root, bool show_display_props)
+static bool render_field_tree(DarttField* root, bool show_display_props, bool& sub_changed)
 {
     bool any_edited = false;
     std::vector<RenderWork> stack;
@@ -544,7 +559,7 @@ static bool render_field_tree(DarttField* root, bool show_display_props)
         bool is_leaf = work.field->children.empty();
 
         // Render this field's row
-        if (render_single_field(work.field, show_display_props))
+        if (render_single_field(work.field, show_display_props, sub_changed))
 		{
             any_edited = true;
         }
@@ -639,12 +654,13 @@ static DarttField* render_field_selector_tree(DarttField* root)
 bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<DarttField*> &subscribed_list)
 {
 	ImGui::Begin("Plot Settings");
-	ImGui::Text("Freq: %f", plot.avg_sampling_freq);
+	
 	// Add line button
 	if (ImGui::SmallButton("+"))
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		plot.lines.push_back(Line());
-		plot.lines.back().xsource = &plot.sys_usec;
+		plot.lines.back().xsource = &plot.sys_sec;
 		int color_index = (plot.lines.size() % NUM_COLORS);
 		plot.lines.back().color = template_colors[color_index];
 		//consider automatic "Clear" here - will look more professional (and it's really easy to implement), but does wipe data
@@ -657,34 +673,18 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	ImGui::SameLine(ImGui::GetWindowWidth() - clear_width - ImGui::GetStyle().WindowPadding.x);
 	if (ImGui::Button("Clear"))
 	{
-		plot.sum_tdif = 0;
-		plot.count = 0;
-		plot.prev_time_us = 0;
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		for (size_t i = 0; i < plot.lines.size(); i++)
 		{
-			plot.lines[i].points.clear();
+			plot.lines[i].clear();
 		}
 	}
 	ImGui::Separator();
-
-	if (plot.wav_writer.is_open())
-	{
-		if (ImGui::Button("Stop Recording"))
-			plot.wav_writer.close(plot.avg_sampling_freq);
-		ImGui::SameLine();
-		ImGui::TextUnformatted("Recording...");
-	}
-	else
-	{
-		if (ImGui::Button("Record WAV"))
-			plot.wav_writer.open("capture.wav");
-	}
-
-	ImGui::Separator();
-
+	
 	int line_to_remove = -1;
 	for (size_t line_idx = 0; line_idx < plot.lines.size(); line_idx++)
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		Line& line = plot.lines[line_idx];
 		ImGui::PushID((int)line_idx);
 
@@ -710,10 +710,10 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 		if (ImGui::RadioButton("Time Mode", &mode, TIME_MODE))
 		{
 			line.mode = TIME_MODE;
-			// Default to sys_usec if no X source assigned
+			// Default to sys_sec if no X source assigned
 			if (line.xsource == nullptr)
 			{
-				line.xsource = &plot.sys_usec;
+				line.xsource = &plot.sys_sec;
 			}
 		}
 		ImGui::SameLine();
@@ -726,9 +726,9 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 		ImGui::Text("X Source:");
 		ImGui::SameLine();
 		const char* x_preview = "None";
-		if (line.xsource == &plot.sys_usec)
+		if (line.xsource == &plot.sys_sec)
 		{
-			x_preview = "sys_usec";
+			x_preview = "sys_sec";
 		}
 		else if (line.xsource != nullptr)
 		{
@@ -745,9 +745,9 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 		ImGui::SetNextItemWidth(150.0f);
 		if (ImGui::BeginCombo("##xsrc", x_preview))
 		{
-			if (ImGui::Selectable("sys_usec", line.xsource == &plot.sys_usec))
+			if (ImGui::Selectable("sys_sec", line.xsource == &plot.sys_sec))
 			{
-				line.xsource = &plot.sys_usec;
+				line.xsource = &plot.sys_sec;
 			}
 			ImGui::Separator();
 			DarttField* selected = render_field_selector_tree(&root);
@@ -812,8 +812,6 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 		ImGui::SameLine();
 		ImGui::InputScalar("##buffsersize", ImGuiDataType_U32, &line.enqueue_cap, 0, 0, "%d");
 
-		ImGui::Checkbox("Audio Out", &line.audio_subscribe);
-
 		// Color picker
 		ImGui::Text("Color:");
 		ImGui::SameLine();
@@ -833,6 +831,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	// Remove line after loop to avoid iterator invalidation
 	if (line_to_remove >= 0 && line_to_remove < (int)plot.lines.size())
 	{
+		std::lock_guard<std::mutex> lock(plot.plot_mutex);
 		plot.lines.erase(plot.lines.begin() + line_to_remove);
 	}
 
@@ -840,7 +839,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	return true;
 }
 
-bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl)
+bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl, WavWriter & wav)
 {
     bool any_edited = false;
 
@@ -853,8 +852,6 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 	ImGui::RadioButton("UDP", &mode, DarttLink::COMM_UDP);
 	ImGui::SameLine();
 	ImGui::RadioButton("TCP", &mode, DarttLink::COMM_TCP);
-	ImGui::SameLine();
-	ImGui::Checkbox("Streaming", &dl.streaming_mode);
 	int new_mode = mode;
 	if (new_mode != dl.comm_mode)
 	{
@@ -863,10 +860,23 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		dl.comm_mode = new_mode;
 	}
 
-	ImGui::Text("Dartt Address: ");
+	int frame_format = dl.msg_type;
+	ImGui::RadioButton("TYPE_SERIAL_MESSAGE", &frame_format, TYPE_SERIAL_MESSAGE);
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(50);
-	ImGui::InputScalar("##dartt_address", ImGuiDataType_U8, &dl.address);
+	ImGui::RadioButton("TYPE_ADDR_MSG", &frame_format, TYPE_ADDR_MESSAGE);
+	if(dl.msg_type != frame_format)
+	{
+		config.subscribed_dirty = true;	//gotta flag out a rebuild, since the read request frame format is stale upon change
+	}
+	dl.msg_type = (serial_message_type_t)frame_format;
+
+	if(dl.msg_type == TYPE_SERIAL_MESSAGE)
+	{
+		ImGui::Text("Dartt Address: ");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(50);
+		ImGui::InputScalar("##dartt_address", ImGuiDataType_U8, &dl.address);
+	}
 
 	switch (dl.comm_mode)
 	{
@@ -875,21 +885,25 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 			ImGui::SameLine();
 			ImGui::Text("Baudrate: ");
 			ImGui::SameLine();
-			ImGui::SetNextItemWidth(50);
-			uint32_t baudrate = dl.serial.get_baud_rate();
+			ImGui::SetNextItemWidth(80);
+			static uint32_t baudrate = 115200;
 			ImGui::InputScalar("##baudrate", ImGuiDataType_U32, &baudrate);
-			if(ImGui::IsItemDeactivatedAfterEdit())
+			// Stay in sync with the actual baud rate while connected and not being edited
+			if (dl.serial.connected() && !ImGui::IsItemActive())
+				baudrate = (uint32_t)dl.serial.get_baud_rate();
+			ImGui::SameLine();
+			if (dl.serial.connected())
 			{
-				printf("Disconnecting serial...\n");
-				dl.serial.disconnect();
-				printf("done.\n Reconnecting with baudrate %d\n", baudrate);
-				if(dl.serial.autoconnect(baudrate))
+				if (ImGui::Button("Disconnect"))
 				{
-					printf("Success. Serial connected\n");
+					dl.serial.disconnect();
 				}
-				else
+			}
+			else
+			{
+				if (ImGui::Button("Connect"))
 				{
-					printf("Serial failed to connect\n");
+					dl.serial.autoconnect(baudrate);
 				}
 			}
 			break;
@@ -959,10 +973,51 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 	{
 		save_dartt_config(config_json_path.c_str(), config, plot, dl);
 	}
+	
+	//calculate average fps
+	{
+		float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
+		ImGui::Text("FPS: %f", fps);
+		ImGui::SameLine();
+		if(ImGui::Button("Clear FPS Counter"))
+		{
+			config.num_frames = 0;
+			time_start();
+		}
+	}
 
 	ImGui::SameLine();
+	ImGui::Separator();
+	if(!wav.is_open())
+	{
+		if(ImGui::Button("Start"))
+		{
+			wav.open("output.wav");
+		}
+	}
+	else
+	{
+		if(ImGui::Button("Close"))
+		{
+			float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
+			wav.close(fps);
+		}
+	}
+
 	static bool show_display_props = false;
 	ImGui::Checkbox("Display Properties", &show_display_props);
+
+	ImGui::SameLine();
+	//streaming mode toggle
+	if(ImGui::Checkbox("Streaming Mode", &dl.streaming_mode))
+	{
+		if(dl.streaming_mode)
+		{
+			dl.clear_subscriptions();
+		}
+		config.subscribed_dirty = true;	//flag out a deferred read request queue rebuild
+	}
+
 
 	ImGui::Separator();
 
@@ -986,9 +1041,11 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
         ImGui::TableHeadersRow();
 
         // Render the field tree iteratively
-        if (render_field_tree(&config.root, show_display_props)) {
+        bool sub_changed = false;
+        if (render_field_tree(&config.root, show_display_props, sub_changed)) {
             any_edited = true;
         }
+        config.subscribed_dirty |= sub_changed;
 
         ImGui::EndTable();
     }

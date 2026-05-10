@@ -35,7 +35,7 @@ public:
 
 
 
-	DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph);
+	DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_type_t msgtype=TYPE_SERIAL_MESSAGE);
 	~DarttLink();
 
 	void init_serial(int baudrate);
@@ -92,6 +92,8 @@ public:
     Serial       serial;
     UdpState     udp;
     TcpState     tcp;
+
+	payload_layer_msg_t pld;
 
 private:
 
