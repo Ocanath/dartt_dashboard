@@ -89,7 +89,7 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 					{
 						//can inject stuff here
 						float v = field->display_value/32767.f;
-						c->wav_writer->write_sample(v*100);
+						c->wav_writer->write_sample(v);
 					}
 				}
 			}
@@ -265,6 +265,7 @@ int main(int argc, char* argv[])
 	WavWriter wav_writer;
 	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl, &wav_writer};
 	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
+	AudioWriter audio_writer(dl.address, 72, dl.serial);
 
 	time_start();	//start time
 	// Main loop
@@ -339,6 +340,7 @@ int main(int argc, char* argv[])
 				save_last_json_path(config_json_path);
 				dl.start();
 				printf("Loaded config from JSON: %s\n", dropped_file_path.c_str());
+				audio_writer.baudrate=dl.serial.get_baud_rate();
 			}
 			else
 			{
@@ -416,6 +418,28 @@ int main(int argc, char* argv[])
 					printf("write error %d\n", rc);
 				}
 			}
+		}
+
+
+
+		{
+			ImGui::Begin("Player");
+
+			if(audio_writer.running_)
+			{
+				if(ImGui::Button("Stop"))
+				{
+					audio_writer.stop();
+				}
+			}
+			else
+			{
+				if(ImGui::Button("Start"))
+				{
+					audio_writer.start();
+				}
+			}
+			ImGui::End();
 		}
 
 
