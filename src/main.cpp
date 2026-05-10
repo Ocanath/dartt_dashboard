@@ -63,16 +63,25 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
         if (c->dl->periph_buf_mutex.try_lock())
 		{
 			std::lock_guard<std::mutex> lock(c->dl->periph_buf_mutex, std::adopt_lock);
+			size_t first_updated_bidx = c->dl->pld.index_arg*sizeof(int32_t);
+			size_t last_updated_bidx = first_updated_bidx + c->dl->pld.msg.len;
+			int64_t nframes_updated=0;
 			for (int i = 0; i < (int)config->subscribed_list.size(); i++)
 			{
 				DarttField* field = config->subscribed_list[i];
-				if (field->state.dirty)
-					continue;
-				std::memcpy(&field->value.u8,
-							config->periph_buf.buf + field->byte_offset,
-							field->nbytes);
+				if(field->byte_offset >= first_updated_bidx && field->byte_offset < last_updated_bidx)
+				{
+					if (field->state.dirty)
+					{
+						continue;
+					}
+					std::memcpy(&field->value.u8,
+								config->periph_buf.buf + field->byte_offset,
+								field->nbytes);
+					nframes_updated++;
+				}
 			}
-			config->num_frames += config->subscribed_list.size();
+			config->num_frames += nframes_updated;
 			config->elapsed_ms = time_get_ms();
 			calculate_display_values(config->leaf_list);
 		}

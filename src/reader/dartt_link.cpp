@@ -13,6 +13,7 @@ DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_typ
 	address = 0;
 	base_offset = 0;
 	comm_mode = COMM_SERIAL;
+	pld = {};
 }
 
 DarttLink::~DarttLink()
@@ -493,7 +494,7 @@ int DarttLink::process_frame()
         cobs_dec_.length
     };
 
-    payload_layer_msg_t pld{};
+    pld = {};
     uint8_t pld_buf[DARTT_LINK_BUF_SIZE];
     dartt_buffer_t pld_msg_buf = { pld_buf, sizeof(pld_buf), 0 };
     pld.msg = pld_msg_buf;
@@ -551,7 +552,9 @@ void DarttLink::dispatch_read_requests(std::unique_lock<std::mutex>& bus_lock)
     {
         std::lock_guard<std::mutex> q_lock(tx_queue_mutex_);
         if (!tx_queue_.empty())
+        {
             return;
+        }
     }
 
     std::lock_guard<std::mutex> rr_lock(read_request_mutex_);
