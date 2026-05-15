@@ -48,11 +48,13 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include "wav_writer.h"
 
 struct ReadCallbackCtx {
     DarttConfig* config;
     Plotter*     plot;
     DarttLink*   dl;
+	WavWriter * wav_writer;
 };
 
 static void on_read_reply(const dartt_mem_t* periph, void* ctx)
@@ -79,11 +81,19 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 								config->periph_buf.buf + field->byte_offset,
 								field->nbytes);
 					nframes_updated++;
+					calculate_display_value(field);
+
+					if(c->wav_writer->is_open())
+					{
+						//can inject stuff here
+						float v = field->display_value/32767.f;
+						c->wav_writer->write_sample(v*100);
+					}
 				}
 			}
 			config->num_frames += nframes_updated;
 			config->elapsed_ms = time_get_ms();
-			calculate_display_values(config->leaf_list);
+			// calculate_display_values(config->leaf_list);
 		}
     }
 
@@ -250,8 +260,8 @@ int main(int argc, char* argv[])
 
 	// Serial connection
 	DarttLink dl(config.ctl_buf, config.periph_buf);
-
-	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl };
+	WavWriter wav_writer;
+	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl, &wav_writer};
 	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
 
 	time_start();	//start time
@@ -416,7 +426,7 @@ int main(int argc, char* argv[])
 			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
 			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
 			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
-			render_live_expressions(config, plot, config_json_path, dl);
+			render_live_expressions(config, plot, config_json_path, dl, wav_writer);
 			if (config.subscribed_dirty)
 			{
 				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
