@@ -20,7 +20,16 @@ public:
         DOUBLE64
     };
     int open(std::string name, type dtype);
-    int add_sample(void* data, size_t size, type dtype);
+    int add_uint8(uint8_t val);
+    int add_uint16(uint16_t val);
+    int add_uint32(uint32_t val);
+    int add_uint64(uint64_t val);
+    int add_int8(int8_t val);
+    int add_int16(int16_t val);
+    int add_int32(int32_t val);
+    int add_int64(int64_t val);
+    int add_float32(float val);
+    int add_double64(double val);
     int close();
     static int open_count();
 private:

@@ -55,8 +55,17 @@ add_subdirectory(external/libdwarf)
 # ELFIO (header-only library for ELF symbol table access)
 # No build step required, just include directory
 
-# dartt_reader (provides: dartt_reader)
+# dartt_reader (provides: dartt_link)
 add_subdirectory(src/reader)
+
+# npy_writer (provides: npy_writer)
+add_subdirectory(src/npy_writer)
+
+# npy writer test
+option(TEST_NPY "Build npy_writer test executable" OFF)
+if(TEST_NPY)
+    add_subdirectory(test_npy)
+endif()
 
 # ============================================================================
 # Main Application

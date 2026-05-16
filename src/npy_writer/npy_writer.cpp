@@ -32,15 +32,14 @@ static void write_header(FILE* f, const char* descr, uint64_t count)
     int n = snprintf(dict, sizeof(dict),
         "{'descr': '%s', 'fortran_order': False, 'shape': (%" PRIu64 ",), }",
         descr, count);
-    // pad with spaces; last byte is \n (required by spec)
     memset(dict + n, ' ', HEADER_LEN - 1 - n);
     dict[HEADER_LEN - 1] = '\n';
 
     const uint8_t magic[] = {0x93, 'N', 'U', 'M', 'P', 'Y', 0x01, 0x00};
-    uint16_t hlen = HEADER_LEN;
+    const uint8_t hlen[2] = { HEADER_LEN & 0xFF, (HEADER_LEN >> 8) & 0xFF };
     fwrite(magic, 1, 8, f);
-    fwrite(&hlen, sizeof(hlen), 1, f);
-    fwrite(dict, 1, HEADER_LEN, f);
+    fwrite(hlen,  1, 2, f);
+    fwrite(dict,  1, HEADER_LEN, f);
 }
 
 int NpyWriter::open(std::string name, type dtype)
@@ -58,14 +57,234 @@ int NpyWriter::open(std::string name, type dtype)
     return 0;
 }
 
-int NpyWriter::add_sample(void* data, size_t size, type /*dtype*/)
+// ---- 1-byte types ----
+
+int NpyWriter::add_uint8(uint8_t val)
 {
     if (!_file)
-        return -1;
-    fwrite(data, 1, size, _file);
+	{
+		return -1;
+	}
+    if (_dtype != UINT8)
+	{
+		return -2;
+	} 
+    fwrite(&val, 1, 1, _file);
     _sample_count++;
     return 0;
 }
+
+int NpyWriter::add_int8(int8_t val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != INT8) 
+	{
+		return -2;
+	}
+    uint8_t b = (uint8_t)(val);
+    fwrite(&b, 1, 1, _file);
+    _sample_count++;
+    return 0;
+}
+
+// ---- 2-byte types ----
+
+int NpyWriter::add_uint16(uint16_t val)
+{
+    if (!_file)
+	{
+		return -1;
+	}
+    if (_dtype != UINT16) 
+	{
+		return -2;
+	}
+
+	unsigned char buf[sizeof(uint16_t)];
+
+	for(size_t i = 0; i < sizeof(uint16_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((val  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, sizeof(uint16_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+int NpyWriter::add_int16(int16_t val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != INT16) 
+	{
+		return -2;
+	}
+    uint16_t u     = (uint16_t)(val);
+	unsigned char buf[sizeof(uint16_t)];
+
+	for(size_t i = 0; i < sizeof(uint16_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((u  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, sizeof(uint16_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+// ---- 4-byte types ----
+
+int NpyWriter::add_uint32(uint32_t val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != UINT32) 
+	{
+		return -2;
+	}
+	unsigned char buf[sizeof(uint32_t)];
+
+	for(size_t i = 0; i < sizeof(uint32_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((val  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, sizeof(uint32_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+int NpyWriter::add_int32(int32_t val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != INT32) 
+	{
+		return -2;
+	}
+    uint32_t u     = (uint32_t)(val);
+	unsigned char buf[sizeof(uint32_t)];
+
+	for(size_t i = 0; i < sizeof(uint32_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((u  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, sizeof(uint32_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+int NpyWriter::add_float32(float val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != FLOAT32) 
+	{
+		return -2;
+	}
+    uint32_t u;
+    memcpy(&u, &val, sizeof(u));
+
+	unsigned char buf[sizeof(uint32_t)];
+	for(size_t i = 0; i < sizeof(uint32_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((u  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, 4, _file);
+    _sample_count++;
+    return 0;
+}
+
+// ---- 8-byte types ----
+
+int NpyWriter::add_uint64(uint64_t val)
+{
+    if (!_file)
+	{
+		return -1;
+	}
+    if (_dtype != UINT64) 
+	{
+		return -2;
+	}
+    
+	uint8_t buf[sizeof(uint64_t)];
+    for (size_t i = 0; i < sizeof(uint64_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((val  >> shift) & 0xFFu);
+	}
+
+    fwrite(buf, 1, sizeof(uint64_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+int NpyWriter::add_int64(int64_t val)
+{
+    if (!_file)
+	{
+		return -1;
+	}
+    if (_dtype != INT64) 
+	{
+		return -2;
+	}
+    uint64_t u = (uint64_t)(val);
+	uint8_t buf[sizeof(uint64_t)];
+    for (size_t i = 0; i < sizeof(uint64_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((u  >> shift) & 0xFFu);
+	}
+    fwrite(buf, 1, sizeof(uint64_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+int NpyWriter::add_double64(double val)
+{
+    if (!_file) 
+	{
+		return -1;
+	}
+    if (_dtype != DOUBLE64) 
+	{
+		return -2;
+	}
+    uint64_t u;
+    memcpy(&u, &val, sizeof(u));
+	uint8_t buf[sizeof(uint64_t)];
+    for (size_t i = 0; i < sizeof(uint64_t); i++)
+	{
+		int shift = (int)i*8;
+		buf[i] = (unsigned char)((u  >> shift) & 0xFFu);
+	}
+    fwrite(buf, 1, sizeof(uint64_t), _file);
+    _sample_count++;
+    return 0;
+}
+
+// ---- lifecycle ----
 
 int NpyWriter::close()
 {
