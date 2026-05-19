@@ -32,6 +32,19 @@ enum class FieldType {
     UNKNOWN
 };
 
+union DarttValue {
+    float    f32;
+    double   f64;
+    int8_t   i8;
+    uint8_t  u8;
+    int16_t  i16;
+    uint16_t u16;
+    int32_t  i32;
+    uint32_t u32;
+    int64_t  i64;
+    uint64_t u64;
+};
+
 // Wraps the one non-copyable member so DarttField can stay a plain aggregate.
 // std::atomic<bool> deletes its copy/move special members; isolating it here
 // keeps the boilerplate contained and prevents silent member-omission bugs if
@@ -74,18 +87,7 @@ struct DarttField
 	float display_value;	//the True Value, scaled by display scale.
 
     // Runtime value storage
-    union {
-        float f32;
-        double f64;
-        int8_t i8;
-        uint8_t u8;
-        int16_t i16;
-        uint16_t u16;
-        int32_t i32;
-        uint32_t u32;
-        int64_t i64;
-        uint64_t u64;
-    } value;
+    DarttValue value;
 
     DarttField()
         : byte_offset(0)

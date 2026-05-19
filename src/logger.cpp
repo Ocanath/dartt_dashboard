@@ -12,8 +12,9 @@ LoggerRingBuffer::LoggerRingBuffer(size_t element_size)
     buf_.resize(element_size * capacity);
 }
 
-bool LoggerRingBuffer::push(const void* data)
+bool LoggerRingBuffer::push(const void* data, size_t size)
 {
+    assert(size >= element_size_);
     size_t head = head_.load(std::memory_order_relaxed);
     size_t tail = tail_.load(std::memory_order_acquire);
     if ((head - tail) >= capacity)
@@ -25,8 +26,9 @@ bool LoggerRingBuffer::push(const void* data)
     return true;
 }
 
-bool LoggerRingBuffer::pop(void* data)
+bool LoggerRingBuffer::pop(void* data, size_t size)
 {
+    assert(size >= element_size_);
     size_t tail = tail_.load(std::memory_order_relaxed);
     size_t head = head_.load(std::memory_order_acquire);
     if (head == tail)
@@ -139,7 +141,94 @@ void DataLogger::package()
 {
 }
 
+
+/*helper function to drain the ring buffer of a log channel
+and write it out to file*/
+bool drain_ring_buffer(LogChannel * pLogChannel)
+{
+	if(pLogChannel == NULL)
+	{
+		return false;
+	}
+	DarttValue val = {};
+	NpyWriter::type dtype = pLogChannel->writer.get_dtype();
+	while(pLogChannel->ring.pop(&val, sizeof(val)))
+	{
+		switch (dtype)
+		{
+			case NpyWriter::UINT8:
+			{
+				pLogChannel->writer.add_uint8(val.u8);
+				break;
+			}
+			case NpyWriter::UINT16:
+			{
+				pLogChannel->writer.add_uint16(val.u16);
+				break;
+			}
+			case NpyWriter::UINT32:
+			{
+				pLogChannel->writer.add_uint32(val.u32);
+				break;
+			}
+			case NpyWriter::UINT64:
+			{
+				pLogChannel->writer.add_uint64(val.u64);
+				break;
+			}
+			case NpyWriter::INT8:
+			{
+				pLogChannel->writer.add_int8(val.i8);
+				break;
+			}
+			case NpyWriter::INT16:
+			{
+				pLogChannel->writer.add_int16(val.i16);
+				break;
+			}
+			case NpyWriter::INT32:
+			{
+				pLogChannel->writer.add_int32(val.i32);
+				break;
+			}
+			case NpyWriter::INT64:
+			{
+				pLogChannel->writer.add_int64(val.i64);
+				break;
+			}
+			case NpyWriter::FLOAT32:
+			{
+				pLogChannel->writer.add_float32(val.f32);
+				break;
+			}
+			case NpyWriter::DOUBLE64:
+			{
+				pLogChannel->writer.add_double64(val.f64);
+				break;
+			}
+			default:
+			{
+				break;
+			}
+		}
+	}
+	return true;
+}
+
 void DataLogger::file_writer_loop()
 {
+	while(running_)
+	{
+		if (channels_mutex_.try_lock())
+		{
+			std::lock_guard<std::mutex> lock(channels_mutex_, std::adopt_lock);
 
+			for(size_t i = 0; i < channels_.size(); i++)
+			{
+				LogChannel * pLogChannel = channels_[i].get();
+				drain_ring_buffer(pLogChannel);
+			}
+		}
+	}
+	package();
 }

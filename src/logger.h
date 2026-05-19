@@ -23,8 +23,8 @@ public:
     LoggerRingBuffer() = default;
     LoggerRingBuffer(size_t element_size);
 
-    bool push(const void* data); // false = full (drop)
-    bool pop(void* data);        // false = empty
+    bool push(const void* data, size_t size); // false = full (drop)
+    bool pop(void* data, size_t size);        // false = empty
 
 private:
     std::vector<uint8_t> buf_;
