@@ -20,5 +20,9 @@ The memory in this list is accessed in three threads - the main rendering thread
 
 The ring buffer class `LoggerRingBuffer` is a canonical single-publisher single-consumer (SPSC) lock-free ring buffer. This means that there must be exactly *one* callsite to `push()` and one callsite to `pop()` for each instance, or else thread safety is not guaranteed. In this design, the `push()` callsite goes in the DarttLink read callback per field value, and the `pop()` callsite goes in the file writer thread.
 
+### Writer Thread Wakeup
+
+The file writer thread blocks on a `std::condition_variable` (`cv_`) rather than sleeping. The read callback calls `DataLogger::notify()` after pushing data, which signals the cv and wakes the writer thread immediately. This avoids system timer resolution floors, which are on the order of milliseconds, which would otherwise create overflow risk at high baud rates. `DataLogger::stop()` also signals the cv to unblock the thread so it can observe `running_ = false` and exit cleanly.
+
 
 

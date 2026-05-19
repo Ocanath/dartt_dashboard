@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <cstdint>
 
 enum LoggerError {
@@ -47,6 +48,8 @@ public:
     void start();
     void stop();
     void package();
+    void notify();                                          // signal writer thread that data is available; call from read callback after push
+    void push(size_t channel_idx, const void* data, size_t nbytes); // call from read callback, 1:1 indexed with subscribed_list
 
 private:
     void file_writer_loop();
@@ -54,5 +57,7 @@ private:
     std::atomic<bool>                        running_{false};
 	/*new language feature (to me:) unique_ptr, which does the work of creating a heap-allocated instance and a pointer reference to it, with automatic memory management*/
     std::vector<std::unique_ptr<LogChannel>> channels_; // 1:1 index-mapped to subscribed_list. Using unique_ptr for automatic heap allocation mapping - due to LogChannel atomics
-	std::mutex channels_mutex_;
+	std::mutex              channels_mutex_;
+    std::condition_variable cv_;
+    std::mutex              cv_mutex_;
 };

@@ -131,10 +131,32 @@ LoggerError DataLogger::build_logging_list(std::vector<DarttField*>& subscribed_
 
 void DataLogger::start()
 {
+    running_ = true;
+    fwriter_thread_ = std::thread(&DataLogger::file_writer_loop, this);
 }
 
 void DataLogger::stop()
 {
+    running_ = false;
+    cv_.notify_one();
+    if (fwriter_thread_.joinable())
+    {
+        fwriter_thread_.join();
+    }
+}
+
+void DataLogger::notify()
+{
+    cv_.notify_one();
+}
+
+void DataLogger::push(size_t channel_idx, const void* data, size_t nbytes)
+{
+    if (channel_idx >= channels_.size())
+    {
+        return;
+    }
+    channels_[channel_idx]->ring.push(data, nbytes);
 }
 
 void DataLogger::package()
@@ -219,14 +241,20 @@ void DataLogger::file_writer_loop()
 {
 	while(running_)
 	{
+		{
+			std::unique_lock<std::mutex> cv_lock(cv_mutex_);
+			cv_.wait(cv_lock);
+		}
+		if (!running_)
+		{
+			break;
+		}
 		if (channels_mutex_.try_lock())
 		{
 			std::lock_guard<std::mutex> lock(channels_mutex_, std::adopt_lock);
-
 			for(size_t i = 0; i < channels_.size(); i++)
 			{
-				LogChannel * pLogChannel = channels_[i].get();
-				drain_ring_buffer(pLogChannel);
+				drain_ring_buffer(channels_[i].get());
 			}
 		}
 	}
