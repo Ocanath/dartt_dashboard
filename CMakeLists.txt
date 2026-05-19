@@ -82,6 +82,7 @@ add_executable(${PROJECT_NAME}
 	src/colors.cpp
 	src/time_util.cpp
 	src/wav_writer.cpp
+	src/logger.cpp
 )
 
 # Debug symbols
@@ -139,6 +140,7 @@ target_link_libraries(${PROJECT_NAME}
     dartt_checksum
     nlohmann_json::nlohmann_json
     dwarf
+	npy_writer
 )
 
 # tinycsocket socket libraries (vendored, header-only with TINYCSOCKET_IMPLEMENTATION)
