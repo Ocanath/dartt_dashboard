@@ -20,6 +20,7 @@ public:
         DOUBLE64
     };
     int open(std::string name, type dtype);
+    type get_dtype() const { return _dtype; }
     int add_uint8(uint8_t val);
     int add_uint16(uint16_t val);
     int add_uint32(uint32_t val);
