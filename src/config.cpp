@@ -8,6 +8,8 @@
 
 using json = nlohmann::json;
 
+DarttField::~DarttField() = default;
+
 // Work item for iterative JSON parsing
 struct ParseWork {
     const json* j;

@@ -11,6 +11,7 @@
 #include "plotting.h"
 #include <nlohmann/json.hpp>
 #include "serial.h"
+#include "log_channel.h"
 
 // Field type classification for parsing and display
 enum class FieldType {
@@ -104,6 +105,9 @@ struct DarttField
     {
         value.u64 = 0;
     }
+    ~DarttField();
+
+    LogChannelHandle log_channel; // non-null only when subscribed and logging
 };
 
 // Top-level config loaded from JSON
