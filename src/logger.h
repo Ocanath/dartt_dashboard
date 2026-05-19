@@ -5,7 +5,15 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <cstdint>
+
+enum LoggerError {
+    LOGGER_OK               =  0,
+    LOGGER_ERR_BAD_TYPE     = -1, // non-primitive field type in subscribed list
+    LOGGER_ERR_OPEN_FAILED  = -2, // NpyWriter::open() failed
+    LOGGER_ERR_BUSY         = -3, // operation not permitted while logger is running
+};
 
 class LoggerRingBuffer
 {
@@ -27,6 +35,7 @@ private:
 
 struct LogChannel
 {
+    LogChannel(size_t element_size) : ring(element_size) {}
     LoggerRingBuffer ring;
     NpyWriter        writer;
 };
@@ -34,7 +43,7 @@ struct LogChannel
 class DataLogger
 {
 public:
-    int build_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex, coupled with subscribed list rebuild
+    LoggerError build_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex, coupled with subscribed list rebuild
     void start();
     void stop();
     void package();
@@ -43,5 +52,7 @@ private:
     void file_writer_loop();
     std::thread                              fwriter_thread_;
     std::atomic<bool>                        running_{false};
-    std::vector<std::unique_ptr<LogChannel>> channels_; // 1:1 index-mapped to subscribed_list
+	/*new language feature (to me:) unique_ptr, which does the work of creating a heap-allocated instance and a pointer reference to it, with automatic memory management*/
+    std::vector<std::unique_ptr<LogChannel>> channels_; // 1:1 index-mapped to subscribed_list. Using unique_ptr for automatic heap allocation mapping - due to LogChannel atomics
+	std::mutex channels_mutex_;
 };
