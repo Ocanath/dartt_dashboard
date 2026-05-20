@@ -92,12 +92,14 @@ LoggerRingBuffer* DataLogger::add_channel(const std::string& filename,
     if (ch->writer.open(filename, dtype) != 0)
         return nullptr;
     LoggerRingBuffer* ring = &ch->ring;
+    std::lock_guard<std::mutex> lock(channels_mutex_);
     channels_.push_back(std::move(ch));
     return ring;
 }
 
 void DataLogger::clear_channels()
 {
+    std::lock_guard<std::mutex> lock(channels_mutex_);
     channels_.clear();
 }
 
@@ -135,13 +137,11 @@ void DataLogger::file_writer_loop()
         if (!running_)
             break;
 
-        // if (periph_buf_mutex_ && periph_buf_mutex_->try_lock())//replace with channels_mutex_ try lock on next commit
+        if (channels_mutex_.try_lock())
         {
-            // std::lock_guard<std::mutex> lock(*periph_buf_mutex_, std::adopt_lock);
+            std::lock_guard<std::mutex> lock(channels_mutex_, std::adopt_lock);
             for (size_t i = 0; i < channels_.size(); i++)
-            {
-				drain_ring_buffer(channels_[i].get());
-			}
+                drain_ring_buffer(channels_[i].get());
         }
     }
     package();

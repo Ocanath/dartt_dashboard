@@ -9,22 +9,16 @@
 #include <condition_variable>
 #include <string>
 
-enum LoggerError {
-    LOGGER_OK              =  0,
-    LOGGER_ERR_OPEN_FAILED = -2,
-    LOGGER_ERR_BUSY        = -3,
-};
 
 class DataLogger
 {
 public:
     // Returns pointer to the channel's ring buffer, or nullptr on open failure.
-    // Must be called under periph_buf_mutex.
     LoggerRingBuffer* add_channel(const std::string& filename,
                                   NpyWriter::type dtype,
                                   size_t element_size);
 
-    // Destroy all channels. Must be protected under the same mutex guarding the add_channel wiring before rebuilding.
+    // Destroy all channels.
     void clear_channels();
 
     void start();
@@ -37,6 +31,7 @@ private:
     void file_writer_loop();
 
     std::vector<std::unique_ptr<LogChannel>> channels_;
+    std::mutex               channels_mutex_;
     std::thread              fwriter_thread_;
     std::atomic<bool>        running_{false};
     std::condition_variable  cv_;
