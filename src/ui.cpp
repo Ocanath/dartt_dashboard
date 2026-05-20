@@ -915,14 +915,14 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 	ImGui::Separator();
 	if(!wav.is_open())
 	{
-		if(ImGui::Button("Start"))
+		if(ImGui::Button("Start Wav (All)"))
 		{
 			wav.open("output.wav");
 		}
 	}
 	else
 	{
-		if(ImGui::Button("Close"))
+		if(ImGui::Button("Close Wav (ALL)"))
 		{
 			float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
 			wav.close(fps);
