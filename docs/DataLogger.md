@@ -39,3 +39,11 @@ The ring buffer class `LoggerRingBuffer` is a canonical single-publisher single-
 ### Writer Thread Wakeup
 
 The file writer thread blocks on a `std::condition_variable` (`cv_`) rather than sleeping. The read callback calls `DataLogger::notify()` once per frame (after pushing all updated fields), which signals the cv and wakes the writer thread immediately. This avoids system timer resolution floors, which are on the order of milliseconds and would otherwise create overflow risk at high baud rates. `DataLogger::stop()` also signals the cv so the thread can observe `running_ = false` and exit cleanly.
+
+
+### Use After Free Risk
+
+There is a high risk of a use-after-free bug due to the method used to map each log channel instance (via pointer which can go stale). It is up to the implementation to de-allocate the ring buffer pointer to avoid this - for every `clear` and `add` call, think - can this cause a stale pointer dereference? Careful management of shared memory (mutex, etc) must be employed to avoid race conditions for shared memory, as in any multithreaded application.
+
+
+
