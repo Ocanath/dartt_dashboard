@@ -126,6 +126,7 @@ endif()
 
 # Include directories for ELF parsing
 target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/external/ELFIO
     ${CMAKE_CURRENT_SOURCE_DIR}/external/libdwarf/src/lib/libdwarf
 )
