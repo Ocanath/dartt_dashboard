@@ -100,6 +100,10 @@ LoggerRingBuffer* DataLogger::add_channel(const std::string& filename,
 void DataLogger::clear_channels()
 {
     std::lock_guard<std::mutex> lock(channels_mutex_);
+    for (size_t i = 0; i < channels_.size(); i++)
+    {
+		channels_[i]->writer.close();
+	}
     channels_.clear();
 }
 
