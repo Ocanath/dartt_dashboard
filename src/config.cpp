@@ -1,5 +1,4 @@
 #include "config.h"
-#include "dartt_init.h"
 #include "plotting.h"
 #include <fstream>
 #include <cstdio>
@@ -355,17 +354,6 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 			}
 		}
 
-		dl.comm_mode = ser_settings.value("comm_mode", (int)DarttLink::COMM_SERIAL);
-
-		std::string ip = ser_settings.value("udp_ip", "192.168.1.100");
-		strncpy(udp_state.ip, ip.c_str(), sizeof(udp_state.ip) - 1);
-		udp_state.ip[sizeof(udp_state.ip) - 1] = '\0';
-		udp_state.port = ser_settings.value("udp_port", (uint16_t)5000);
-
-		std::string tcp_ip = ser_settings.value("tcp_ip", "192.168.1.100");
-		strncpy(tcp_state.ip, tcp_ip.c_str(), sizeof(tcp_state.ip) - 1);
-		tcp_state.ip[sizeof(tcp_state.ip) - 1] = '\0';
-		tcp_state.port = ser_settings.value("tcp_port", (uint16_t)5000);
 	}
 	
     // Parse top-level fields
@@ -413,12 +401,7 @@ void save_serial_settings(json & j, DarttLink & dl)
 	serial_settings["dartt_serial_address"] = dl.address;
 	serial_settings["dartt_blob_base_offset"] = dl.base_offset;
 	serial_settings["baudrate"] = dl.serial.get_baud_rate();
-	serial_settings["comm_mode"] = (int)dl.comm_mode;
 	serial_settings["frame_format"] = (int)dl.msg_type;
-	serial_settings["udp_ip"] = std::string(udp_state.ip);
-	serial_settings["udp_port"] = udp_state.port;
-	serial_settings["tcp_ip"] = std::string(tcp_state.ip);
-	serial_settings["tcp_port"] = tcp_state.port;
 	j["serial_settings"] = serial_settings;
 }
 

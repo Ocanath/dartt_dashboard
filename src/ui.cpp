@@ -845,21 +845,6 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 
     ImGui::Begin("Live Expressions");
 
-	// Transport mode toggle
-	int mode = (int)dl.comm_mode;
-	ImGui::RadioButton("Serial", &mode, DarttLink::COMM_SERIAL);
-	ImGui::SameLine();
-	ImGui::RadioButton("UDP", &mode, DarttLink::COMM_UDP);
-	ImGui::SameLine();
-	ImGui::RadioButton("TCP", &mode, DarttLink::COMM_TCP);
-	int new_mode = mode;
-	if (new_mode != dl.comm_mode)
-	{
-		if (dl.comm_mode == DarttLink::COMM_UDP) udp_disconnect(&udp_state);
-		if (dl.comm_mode == DarttLink::COMM_TCP) tcp_disconnect(&tcp_state);
-		dl.comm_mode = new_mode;
-	}
-
 	int frame_format = dl.msg_type;
 	ImGui::RadioButton("TYPE_SERIAL_MESSAGE", &frame_format, TYPE_SERIAL_MESSAGE);
 	ImGui::SameLine();
@@ -878,85 +863,25 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		ImGui::InputScalar("##dartt_address", ImGuiDataType_U8, &dl.address);
 	}
 
-	switch (dl.comm_mode)
 	{
-		case DarttLink::COMM_SERIAL:
+		ImGui::SameLine();
+		ImGui::Text("Baudrate: ");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(80);
+		static uint32_t baudrate = 115200;
+		ImGui::InputScalar("##baudrate", ImGuiDataType_U32, &baudrate);
+		if (dl.serial.connected() && !ImGui::IsItemActive())
+			baudrate = (uint32_t)dl.serial.get_baud_rate();
+		ImGui::SameLine();
+		if (dl.serial.connected())
 		{
-			ImGui::SameLine();
-			ImGui::Text("Baudrate: ");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(80);
-			static uint32_t baudrate = 115200;
-			ImGui::InputScalar("##baudrate", ImGuiDataType_U32, &baudrate);
-			// Stay in sync with the actual baud rate while connected and not being edited
-			if (dl.serial.connected() && !ImGui::IsItemActive())
-				baudrate = (uint32_t)dl.serial.get_baud_rate();
-			ImGui::SameLine();
-			if (dl.serial.connected())
-			{
-				if (ImGui::Button("Disconnect"))
-				{
-					dl.serial.disconnect();
-				}
-			}
-			else
-			{
-				if (ImGui::Button("Connect"))
-				{
-					dl.serial.autoconnect(baudrate);
-				}
-			}
-			break;
+			if (ImGui::Button("Disconnect"))
+				dl.serial.disconnect();
 		}
-		case DarttLink::COMM_UDP:
+		else
 		{
-			ImGui::SameLine();
-			ImGui::Text("IP: ");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(120);
-			ImGui::InputText("##udp_ip", udp_state.ip, sizeof(udp_state.ip));
-			ImGui::SameLine();
-			ImGui::Text("Port: ");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(60);
-			ImGui::InputScalar("##udp_port", ImGuiDataType_U16, &udp_state.port);
-			ImGui::SameLine();
-			if (udp_state.connected)
-			{
-				if (ImGui::Button("Disconnect"))
-					udp_disconnect(&udp_state);
-			}
-			else
-			{
-				if (ImGui::Button("Connect"))
-					udp_connect(&udp_state);
-			}
-			break;
-		}
-		case DarttLink::COMM_TCP:
-		{
-			ImGui::SameLine();
-			ImGui::Text("IP: ");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(120);
-			ImGui::InputText("##tcp_ip", tcp_state.ip, sizeof(tcp_state.ip));
-			ImGui::SameLine();
-			ImGui::Text("Port: ");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(60);
-			ImGui::InputScalar("##tcp_port", ImGuiDataType_U16, &tcp_state.port);
-			ImGui::SameLine();
-			if (tcp_state.connected)
-			{
-				if (ImGui::Button("Disconnect"))
-					tcp_disconnect(&tcp_state);
-			}
-			else
-			{
-				if (ImGui::Button("Connect"))
-					tcp_connect(&tcp_state);
-			}
-			break;
+			if (ImGui::Button("Connect"))
+				dl.serial.autoconnect(baudrate);
 		}
 	}
 

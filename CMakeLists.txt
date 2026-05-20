@@ -73,7 +73,6 @@ endif()
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
-	src/dartt_init.cpp
 	src/config.cpp
 	src/elf_parser.cpp
 	src/ui.cpp
@@ -144,7 +143,3 @@ target_link_libraries(${PROJECT_NAME}
     npy_writer
 )
 
-# tinycsocket socket libraries (vendored, header-only with TINYCSOCKET_IMPLEMENTATION)
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} wsock32 ws2_32 iphlpapi)
-endif()
