@@ -59,7 +59,7 @@ add_subdirectory(external/libdwarf)
 add_subdirectory(src/reader)
 
 # npy_writer (provides: npy_writer)
-add_subdirectory(src/npy_writer)
+add_subdirectory(external/npy_writer)
 
 # npy writer test
 option(TEST_NPY "Build npy_writer test executable" OFF)
