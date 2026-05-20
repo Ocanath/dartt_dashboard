@@ -149,20 +149,20 @@ void DataLogger::init(std::mutex& periph_buf_mutex)
     periph_buf_mutex_ = &periph_buf_mutex;
 }
 
+LoggerError DataLogger::clean_logging_list(std::vector<DarttField*>& subscribed_list)
+{
+	for (size_t i = 0; i < subscribed_list.size(); i++)
+	{
+		subscribed_list[i]->log_channel.ptr.reset();
+	}
+	return LOGGER_OK;
+}
+
 // called within the main/GUI thread under periph_buf_mutex
 LoggerError DataLogger::build_logging_list(std::vector<DarttField*>& subscribed_list)
 {
+	p_subscribed_list_ = &subscribed_list;
     // clear log channels from previous subscribed list
-    if (subscribed_list_ != nullptr)
-    {
-        for (size_t i = 0; i < subscribed_list_->size(); i++)
-        {
-            (*subscribed_list_)[i]->log_channel.ptr.reset();
-        }
-    }
-
-    subscribed_list_ = &subscribed_list;
-
     for (size_t i = 0; i < subscribed_list.size(); i++)
     {
         DarttField* field = subscribed_list[i];
@@ -220,17 +220,17 @@ void DataLogger::file_writer_loop()
         if (periph_buf_mutex_ && periph_buf_mutex_->try_lock())
         {
             std::lock_guard<std::mutex> lock(*periph_buf_mutex_, std::adopt_lock);
-            if (subscribed_list_ != nullptr)
-            {
-                for (size_t i = 0; i < subscribed_list_->size(); i++)
-                {
-                    DarttField* field = (*subscribed_list_)[i];
-                    if (field->log_channel.ptr)
-                    {
-                        drain_ring_buffer(field->log_channel.ptr.get());
-                    }
-                }
-            }
+			if(p_subscribed_list_ != nullptr)
+			{
+				for (size_t i = 0; i < p_subscribed_list_->size(); i++)
+				{
+					DarttField* field = (*p_subscribed_list_)[i];
+					if (field->log_channel.ptr)
+					{
+						drain_ring_buffer(field->log_channel.ptr.get());
+					}
+				}            
+			}
         }
     }
     package();

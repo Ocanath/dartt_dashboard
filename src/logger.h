@@ -21,6 +21,7 @@ class DataLogger
 public:
     void init(std::mutex& periph_buf_mutex);
     LoggerError build_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex
+	LoggerError clean_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex
     void start();
     void stop();
     void package();
@@ -32,7 +33,7 @@ private:
     std::thread              fwriter_thread_;
     std::atomic<bool>        running_{false};
     std::mutex*              periph_buf_mutex_ = nullptr;
-    std::vector<DarttField*>* subscribed_list_ = nullptr;
+	std::vector<DarttField*> * p_subscribed_list_ = nullptr;
     std::condition_variable  cv_;
     std::mutex               cv_mutex_;
 };
