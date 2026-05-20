@@ -107,7 +107,7 @@ struct DarttField
     }
     ~DarttField();
 
-    LogChannelHandle log_channel; // non-null only when subscribed and logging
+    LoggerRingBuffer* log_ring = nullptr; // non-null only when subscribed and logger is running
 };
 
 // Top-level config loaded from JSON

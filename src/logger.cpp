@@ -1,81 +1,25 @@
 #include "logger.h"
-#include "config.h"
-#include <cassert>
 #include <cstring>
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
+union LogVal {
+    uint8_t  u8;
+    uint16_t u16;
+    uint32_t u32;
+    uint64_t u64;
+    int8_t   i8;
+    int16_t  i16;
+    int32_t  i32;
+    int64_t  i64;
+    float    f32;
+    double   f64;
+};
 
-static bool field_type_to_npy_type(FieldType ftype, NpyWriter::type& out)
-{
-    switch (ftype)
-    {
-        case FieldType::UINT8:
-        {
-            out = NpyWriter::UINT8;
-            return true;
-        }
-        case FieldType::UINT16:
-        {
-            out = NpyWriter::UINT16;
-            return true;
-        }
-        case FieldType::UINT32:
-        {
-            out = NpyWriter::UINT32;
-            return true;
-        }
-        case FieldType::UINT64:
-        {
-            out = NpyWriter::UINT64;
-            return true;
-        }
-        case FieldType::INT8:
-        {
-            out = NpyWriter::INT8;
-            return true;
-        }
-        case FieldType::INT16:
-        {
-            out = NpyWriter::INT16;
-            return true;
-        }
-        case FieldType::INT32:
-        {
-            out = NpyWriter::INT32;
-            return true;
-        }
-        case FieldType::INT64:
-        {
-            out = NpyWriter::INT64;
-            return true;
-        }
-        case FieldType::FLOAT:
-        {
-            out = NpyWriter::FLOAT32;
-            return true;
-        }
-        case FieldType::DOUBLE:
-        {
-            out = NpyWriter::DOUBLE64;
-            return true;
-        }
-        default:
-        {
-            return false;
-        }
-    }
-}
-
-/*helper function to drain the ring buffer of a log channel and write to file*/
 static bool drain_ring_buffer(LogChannel* pLogChannel)
 {
     if (pLogChannel == nullptr)
-    {
         return false;
-    }
-    DarttValue val = {};
+
+    LogVal val = {};
     NpyWriter::type dtype = pLogChannel->writer.get_dtype();
     while (pLogChannel->ring.pop(&val, sizeof(val)))
     {
@@ -140,44 +84,21 @@ static bool drain_ring_buffer(LogChannel* pLogChannel)
     return true;
 }
 
-// ============================================================================
-// DataLogger
-// ============================================================================
-
-void DataLogger::init(std::mutex& periph_buf_mutex)
+LoggerRingBuffer* DataLogger::add_channel(const std::string& filename,
+                                           NpyWriter::type dtype,
+                                           size_t element_size)
 {
-    periph_buf_mutex_ = &periph_buf_mutex;
+    std::unique_ptr<LogChannel> ch = std::make_unique<LogChannel>(element_size);
+    if (ch->writer.open(filename, dtype) != 0)
+        return nullptr;
+    LoggerRingBuffer* ring = &ch->ring;
+    channels_.push_back(std::move(ch));
+    return ring;
 }
 
-LoggerError DataLogger::clean_logging_list(std::vector<DarttField*>& subscribed_list)
+void DataLogger::clear_channels()
 {
-	for (size_t i = 0; i < subscribed_list.size(); i++)
-	{
-		subscribed_list[i]->log_channel.ptr.reset();
-	}
-	return LOGGER_OK;
-}
-
-// called within the main/GUI thread under periph_buf_mutex
-LoggerError DataLogger::build_logging_list(std::vector<DarttField*>& subscribed_list)
-{
-	p_subscribed_list_ = &subscribed_list;
-    // clear log channels from previous subscribed list
-    for (size_t i = 0; i < subscribed_list.size(); i++)
-    {
-        DarttField* field = subscribed_list[i];
-        NpyWriter::type npy_type;
-        if (!field_type_to_npy_type(field->type, npy_type))
-        {
-            return LOGGER_ERR_BAD_TYPE;
-        }
-        field->log_channel.ptr = std::make_unique<LogChannel>(field->nbytes);
-        if (field->log_channel.ptr->writer.open(field->name, npy_type) != 0)
-        {
-            return LOGGER_ERR_OPEN_FAILED;
-        }
-    }
-    return LOGGER_OK;
+    channels_.clear();
 }
 
 void DataLogger::start()
@@ -191,9 +112,7 @@ void DataLogger::stop()
     running_ = false;
     cv_.notify_one();
     if (fwriter_thread_.joinable())
-    {
         fwriter_thread_.join();
-    }
 }
 
 void DataLogger::notify()
@@ -214,22 +133,14 @@ void DataLogger::file_writer_loop()
             cv_.wait(cv_lock);
         }
         if (!running_)
-        {
             break;
-        }
-        if (periph_buf_mutex_ && periph_buf_mutex_->try_lock())
+
+        // if (periph_buf_mutex_ && periph_buf_mutex_->try_lock())//replace with channels_mutex_ try lock on next commit
         {
-            std::lock_guard<std::mutex> lock(*periph_buf_mutex_, std::adopt_lock);
-			if(p_subscribed_list_ != nullptr)
-			{
-				for (size_t i = 0; i < p_subscribed_list_->size(); i++)
-				{
-					DarttField* field = (*p_subscribed_list_)[i];
-					if (field->log_channel.ptr)
-					{
-						drain_ring_buffer(field->log_channel.ptr.get());
-					}
-				}            
+            // std::lock_guard<std::mutex> lock(*periph_buf_mutex_, std::adopt_lock);
+            for (size_t i = 0; i < channels_.size(); i++)
+            {
+				drain_ring_buffer(channels_[i].get());
 			}
         }
     }

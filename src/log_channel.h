@@ -2,7 +2,6 @@
 #include "npy_writer.h"
 #include <vector>
 #include <atomic>
-#include <memory>
 #include <cstdint>
 
 // ============================================================================
@@ -39,21 +38,3 @@ struct LogChannel
     NpyWriter        writer;
 };
 
-// ============================================================================
-// LogChannelHandle — owns a LogChannel via unique_ptr with rule of 5.
-// Isolates non-copyable/non-movable members from DarttField, following the
-// same pattern as DarttFieldState for std::atomic.
-// Copy = null (logging state does not transfer on field copy).
-// ============================================================================
-
-struct LogChannelHandle
-{
-    LogChannelHandle() = default;
-    LogChannelHandle(const LogChannelHandle&);
-    LogChannelHandle(LogChannelHandle&&) noexcept;
-    LogChannelHandle& operator=(const LogChannelHandle&);
-    LogChannelHandle& operator=(LogChannelHandle&&) noexcept;
-    ~LogChannelHandle();
-
-    std::unique_ptr<LogChannel> ptr;
-};

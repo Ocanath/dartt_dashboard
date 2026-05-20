@@ -40,32 +40,3 @@ bool LoggerRingBuffer::pop(void* data, size_t size)
     return true;
 }
 
-// ============================================================================
-// LogChannelHandle — rule of 5
-// All definitions are out-of-line so that LogChannel is fully defined at the
-// point where unique_ptr<LogChannel> is constructed, reset, or destroyed.
-// ============================================================================
-
-LogChannelHandle::LogChannelHandle(const LogChannelHandle&)
-{
-    // copy = null: logging state does not transfer on field copy
-}
-
-LogChannelHandle::LogChannelHandle(LogChannelHandle&& o) noexcept
-    : ptr(std::move(o.ptr))
-{
-}
-
-LogChannelHandle& LogChannelHandle::operator=(const LogChannelHandle&)
-{
-    ptr.reset();
-    return *this;
-}
-
-LogChannelHandle& LogChannelHandle::operator=(LogChannelHandle&& o) noexcept
-{
-    ptr = std::move(o.ptr);
-    return *this;
-}
-
-LogChannelHandle::~LogChannelHandle() = default;

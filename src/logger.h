@@ -1,39 +1,44 @@
 #pragma once
 
 #include "log_channel.h"
-
-struct DarttField; // full definition in config.h
 #include <vector>
+#include <memory>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <string>
 
 enum LoggerError {
-    LOGGER_OK               =  0,
-    LOGGER_ERR_BAD_TYPE     = -1, // non-primitive field type in subscribed list
-    LOGGER_ERR_OPEN_FAILED  = -2, // NpyWriter::open() failed
-    LOGGER_ERR_BUSY         = -3, // operation not permitted while logger is running
+    LOGGER_OK              =  0,
+    LOGGER_ERR_OPEN_FAILED = -2,
+    LOGGER_ERR_BUSY        = -3,
 };
 
 class DataLogger
 {
 public:
-    void init(std::mutex& periph_buf_mutex);
-    LoggerError build_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex
-	LoggerError clean_logging_list(std::vector<DarttField*>& subscribed_list); // call under periph_buf_mutex
+    // Returns pointer to the channel's ring buffer, or nullptr on open failure.
+    // Must be called under periph_buf_mutex.
+    LoggerRingBuffer* add_channel(const std::string& filename,
+                                  NpyWriter::type dtype,
+                                  size_t element_size);
+
+    // Destroy all channels. Must be protected under the same mutex guarding the add_channel wiring before rebuilding.
+    void clear_channels();
+
     void start();
     void stop();
     void package();
-    void notify(); // call from read callback after pushing to field->log_channel
+    void notify(); // call from read callback after pushing data
     bool is_running() const { return running_; }
 
 private:
     void file_writer_loop();
+
+    std::vector<std::unique_ptr<LogChannel>> channels_;
     std::thread              fwriter_thread_;
     std::atomic<bool>        running_{false};
-    std::mutex*              periph_buf_mutex_ = nullptr;
-	std::vector<DarttField*> * p_subscribed_list_ = nullptr;
     std::condition_variable  cv_;
     std::mutex               cv_mutex_;
 };
