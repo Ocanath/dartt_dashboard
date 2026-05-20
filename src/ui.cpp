@@ -839,7 +839,7 @@ bool render_plotting_menu(Plotter &plot, DarttField& root, const std::vector<Dar
 	return true;
 }
 
-bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl, WavWriter & wav)
+bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::string& config_json_path, DarttLink & dl, WavWriter & wav, DataLogger& data_logger)
 {
     bool any_edited = false;
 
@@ -926,6 +926,23 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		{
 			float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
 			wav.close(fps);
+		}
+	}
+
+	ImGui::SameLine();
+	if (!data_logger.is_running())
+	{
+		if (ImGui::Button("Start Log"))
+		{
+			data_logger.start();
+			config.subscribed_dirty = true;
+		}
+	}
+	else
+	{
+		if (ImGui::Button("Stop Log"))
+		{
+			data_logger.stop();
 		}
 	}
 

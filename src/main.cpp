@@ -336,6 +336,7 @@ int main(int argc, char* argv[])
 			}
 			dl.ctl_base.buf = nullptr;
 			dl.periph_base.buf = nullptr;
+			data_logger.clear_channels();
 			config = DarttConfig();
 
 			if (load_dartt_config(dropped_file_path.c_str(), config, plot, dl.serial, dl))
@@ -371,6 +372,7 @@ int main(int argc, char* argv[])
 			}
 			dl.ctl_base.buf = nullptr;
 			dl.periph_base.buf = nullptr;
+			data_logger.clear_channels();
 			config = DarttConfig();
 
 			elf_parse_error_t err = elf_parser_load_config(dropped_file_path.c_str(), var_name_buf, &config);
@@ -441,7 +443,7 @@ int main(int argc, char* argv[])
 			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
 			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
 			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
-			render_live_expressions(config, plot, config_json_path, dl, wav_writer);
+			render_live_expressions(config, plot, config_json_path, dl, wav_writer, data_logger);
 			if (config.subscribed_dirty)
 			{
 				for (size_t i = 0; i < config.subscribed_list.size(); i++)
