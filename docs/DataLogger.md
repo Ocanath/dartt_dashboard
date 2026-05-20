@@ -1,28 +1,41 @@
 # Data Logger
 
 ### Overview
-This class performs asynchronous filewriting/logging of npy files (numpy native data format) while preserving realtime performance of the dashboard. The TU contains a logger class definition and owns it's own ImGui window, with basic features like starting/stopping logging (which persists in the settings json), and .npz package filenames.
+This class performs asynchronous filewriting/logging of npy files (numpy native data format) while preserving realtime performance of the dashboard. The TU contains a logger class definition and owns its own ImGui window, with basic features like starting/stopping logging (which persists in the settings json), and .npz package filenames.
 
 At a high level, the DataLogger plugs into the rest of the code in the following way:
 
-1. Read callback iterates through the DarttFields in the subscribed list. Each new incoming element will get enqueued to a ring/circular FIFO buffer.
-2. The DataLogger runs an async process for dispatching file writes via the NpyWriter class. It drains the ring buffer(s) as it writes.
+1. Read callback iterates the subscribed list. For each updated field, if `field->log_ring` is non-null, the raw value is pushed to the ring buffer. After the loop, `DataLogger::notify()` is called once to wake the writer thread.
+2. The DataLogger runs an async process for dispatching file writes via the NpyWriter class. It drains its internal channel ring buffers as it writes.
 
-The DataLogger owns a File Writer List, containing npy file writers and a ring buffer used to share data from the link to the logger. 
+### Ownership and Portability
 
-### Rebuilding the File Writer List
+`DataLogger` is a self-contained, portable module. It has no knowledge of `DarttField` or `FieldType` — it accepts only primitive inputs and exposes a `LoggerRingBuffer*` handle back to the caller.
 
-The numpy writer list is built from the subscribed fields list - i.e. the callsite to `build_logging_list` must be coupled with the subscribed list build callsite, and guarded with the same mutex for thread safety. It inherits the symbol names from its associated `DarttField` element and has a 1:1 association (index mapped) with each DarttField element. It carries both the `NpyWriter` instance and the `RingBuffer` instance for each symbol/subscribed field, which is used to transport the data from the I/O link to the logger. This follows a separate data path from plotting (for now), as it uses native data types to minimize logging file sizes- for instance, a stream of int16_t will be 2 or 4 times smaller in size than a `float` or `double` respectively, with no data loss. 
+`DataLogger` owns a `std::vector<std::unique_ptr<LogChannel>> channels_`. Each `LogChannel` holds one `LoggerRingBuffer` and one `NpyWriter`. Adding a channel is done via:
 
-The memory in this list is accessed in three threads - the main rendering thread (`build_logging_list`), the write-to-file dispatch thread (`.pop()` and npy writer `add_` calls), and the link callback (`push()`). Thread safety is guaranteed for `pop()` and `push()` via a SPSC ring buffer implementation, and via mutex for the rendering/writing threads.
+```cpp
+LoggerRingBuffer* add_channel(const std::string& filename, NpyWriter::type dtype, size_t element_size);
+```
+
+The returned pointer is stored in `DarttField::log_ring` (a raw non-owning pointer, null when not logging). All wiring — including the `FieldType` to `NpyWriter::type` conversion — lives in the application integration layer.
+
+`LogChannel` contains a `LoggerRingBuffer` with `std::atomic` members, making it non-movable. `unique_ptr` is used so the vector can hold them without moves, and the returned ring buffer pointer remains stable for the lifetime of the channel.
+
+### Rebuilding the Channel List
+
+When the subscribed list is rebuilt (on `subscribed_dirty`), the sequence under `periph_buf_mutex` is:
+
+1. Null all `field->log_ring` pointers on the old subscribed list — stops the read callback from pushing to stale rings. Critical to prevent use-after-free or similar memory corruption issues.
+2. Rebuild the subscribed list via `collect_subscribed_fields`.
+3. If the logger is running: call `data_logger.clear_channels()`, then for each new subscribed field call `add_channel` and store the returned pointer in `field->log_ring`. Note - this means enabling logging at the top level must dispatch a new subscribed list rebuild.
+
+This guarantees no dangling pointer use: the ring pointers are nulled before the channels are destroyed, and both operations happen under the same mutex that the writer thread respects.
 
 ### Logger Ring Buffer
 
-The ring buffer class `LoggerRingBuffer` is a canonical single-publisher single-consumer (SPSC) lock-free ring buffer. This means that there must be exactly *one* callsite to `push()` and one callsite to `pop()` for each instance, or else thread safety is not guaranteed. In this design, the `push()` callsite goes in the DarttLink read callback per field value, and the `pop()` callsite goes in the file writer thread.
+The ring buffer class `LoggerRingBuffer` is a canonical single-publisher single-consumer (SPSC) lock-free ring buffer. There must be exactly *one* callsite to `push()` and one to `pop()` per instance. In this design, `push()` is called from the read callback (one thread), and `pop()` is called from the file writer thread.
 
 ### Writer Thread Wakeup
 
-The file writer thread blocks on a `std::condition_variable` (`cv_`) rather than sleeping. The read callback calls `DataLogger::notify()` after pushing data, which signals the cv and wakes the writer thread immediately. This avoids system timer resolution floors, which are on the order of milliseconds, which would otherwise create overflow risk at high baud rates. `DataLogger::stop()` also signals the cv to unblock the thread so it can observe `running_ = false` and exit cleanly.
-
-
-
+The file writer thread blocks on a `std::condition_variable` (`cv_`) rather than sleeping. The read callback calls `DataLogger::notify()` once per frame (after pushing all updated fields), which signals the cv and wakes the writer thread immediately. This avoids system timer resolution floors, which are on the order of milliseconds and would otherwise create overflow risk at high baud rates. `DataLogger::stop()` also signals the cv so the thread can observe `running_ = false` and exit cleanly.
