@@ -180,7 +180,7 @@ void DarttLink::read_loop()
             bool timed_out = awaiting_reply_ &&
                 (cur_time - last_request_time_) >
                 std::chrono::milliseconds(read_request_timeout_ms);
-			if(timed_out)
+			if(timed_out && serial.connected())
 			{
 				std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time.time_since_epoch());
 				printf("Timeout %lld\n", (long long)ms.count() );
