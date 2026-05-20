@@ -12,7 +12,7 @@
 class LoggerRingBuffer
 {
 public:
-    static constexpr size_t capacity = 32;
+    static constexpr size_t capacity = 256;
 
     LoggerRingBuffer() = default;
     LoggerRingBuffer(size_t element_size);
