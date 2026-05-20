@@ -505,6 +505,8 @@ int main(int argc, char* argv[])
 	// save_dartt_config("config.json", config);
 
 	dl.stop();
+	data_logger.stop();
+	data_logger.clear_channels();
 
 	// Cleanup
 	shutdown_imgui();

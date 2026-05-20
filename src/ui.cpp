@@ -943,6 +943,7 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		if (ImGui::Button("Stop Log"))
 		{
 			data_logger.stop();
+			data_logger.clear_channels();
 		}
 	}
 

@@ -289,13 +289,16 @@ int NpyWriter::add_double64(double val)
 int NpyWriter::close()
 {
     if (!_file)
+	{
         return -1;
+	}
     fflush(_file);
     fseek(_file, 0, SEEK_SET);
     write_header(_file, _descr, _sample_count);
     fclose(_file);
     _file = nullptr;
     _open_count.fetch_sub(1, std::memory_order_relaxed);
+    printf("Wrote %s (%llu samples)\n", _filename.c_str(), (unsigned long long)_sample_count);
     return 0;
 }
 

@@ -89,7 +89,7 @@ LoggerRingBuffer* DataLogger::add_channel(const std::string& filename,
                                            size_t element_size)
 {
     std::unique_ptr<LogChannel> ch = std::make_unique<LogChannel>(element_size);
-    if (ch->writer.open(filename, dtype) != 0)
+    if (ch->writer.open(filename + ".npy", dtype) != 0)
         return nullptr;
     LoggerRingBuffer* ring = &ch->ring;
     std::lock_guard<std::mutex> lock(channels_mutex_);
