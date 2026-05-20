@@ -447,7 +447,9 @@ int main(int argc, char* argv[])
 			if (config.subscribed_dirty)
 			{
 				for (size_t i = 0; i < config.subscribed_list.size(); i++)
+				{
 					config.subscribed_list[i]->log_ring = nullptr;
+				}
 
 				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
 
