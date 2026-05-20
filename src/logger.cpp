@@ -148,5 +148,11 @@ void DataLogger::file_writer_loop()
                 drain_ring_buffer(channels_[i].get());
         }
     }
+    if (channels_mutex_.try_lock())
+    {
+        std::lock_guard<std::mutex> lock(channels_mutex_, std::adopt_lock);
+        for (size_t i = 0; i < channels_.size(); i++)
+            drain_ring_buffer(channels_[i].get());
+    }
     package();
 }
