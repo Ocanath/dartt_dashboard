@@ -11,6 +11,7 @@
 #include "plotting.h"
 #include <nlohmann/json.hpp>
 #include "serial.h"
+#include "log_channel.h"
 
 // Field type classification for parsing and display
 enum class FieldType {
@@ -30,6 +31,19 @@ enum class FieldType {
     POINTER,
     ENUM,
     UNKNOWN
+};
+
+union DarttValue {
+    float    f32;
+    double   f64;
+    int8_t   i8;
+    uint8_t  u8;
+    int16_t  i16;
+    uint16_t u16;
+    int32_t  i32;
+    uint32_t u32;
+    int64_t  i64;
+    uint64_t u64;
 };
 
 // Wraps the one non-copyable member so DarttField can stay a plain aggregate.
@@ -74,18 +88,7 @@ struct DarttField
 	float display_value;	//the True Value, scaled by display scale.
 
     // Runtime value storage
-    union {
-        float f32;
-        double f64;
-        int8_t i8;
-        uint8_t u8;
-        int16_t i16;
-        uint16_t u16;
-        int32_t i32;
-        uint32_t u32;
-        int64_t i64;
-        uint64_t u64;
-    } value;
+    DarttValue value;
 
     DarttField()
         : byte_offset(0)
@@ -102,6 +105,9 @@ struct DarttField
     {
         value.u64 = 0;
     }
+    ~DarttField();
+
+    LoggerRingBuffer* log_ring = nullptr; // non-null only when subscribed and logger is running
 };
 
 // Top-level config loaded from JSON

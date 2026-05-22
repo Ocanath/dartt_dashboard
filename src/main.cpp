@@ -1,16 +1,9 @@
 #include <cstdio>
 
-#define TINYCSOCKET_IMPLEMENTATION
-
-// Platform headers (must come before GL on Windows)
 #ifdef _WIN32
 #define NOMINMAX
-#include <winsock2.h>
 #include <windows.h>
 #endif
-
-// tinycsocket (must come before SDL - SDL redefines main to SDL_main)
-#include "tinycsocket.h"
 
 // SDL2
 #include <SDL.h>
@@ -49,12 +42,32 @@
 #include <cstring>
 #include <string>
 #include "wav_writer.h"
+#include "logger.h"
+
+static bool field_type_to_npy_type(FieldType ftype, NpyWriter::type& out)
+{
+    switch (ftype)
+    {
+        case FieldType::UINT8:   out = NpyWriter::UINT8;    return true;
+        case FieldType::UINT16:  out = NpyWriter::UINT16;   return true;
+        case FieldType::UINT32:  out = NpyWriter::UINT32;   return true;
+        case FieldType::UINT64:  out = NpyWriter::UINT64;   return true;
+        case FieldType::INT8:    out = NpyWriter::INT8;     return true;
+        case FieldType::INT16:   out = NpyWriter::INT16;    return true;
+        case FieldType::INT32:   out = NpyWriter::INT32;    return true;
+        case FieldType::INT64:   out = NpyWriter::INT64;    return true;
+        case FieldType::FLOAT:   out = NpyWriter::FLOAT32;  return true;
+        case FieldType::DOUBLE:  out = NpyWriter::DOUBLE64; return true;
+        default:                                             return false;
+    }
+}
 
 struct ReadCallbackCtx {
     DarttConfig* config;
     Plotter*     plot;
     DarttLink*   dl;
-	WavWriter * wav_writer;
+	WavWriter*   wav_writer;
+	DataLogger*  data_logger;
 };
 
 static void on_read_reply(const dartt_mem_t* periph, void* ctx)
@@ -68,6 +81,7 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 			size_t first_updated_bidx = c->dl->pld.index_arg*sizeof(int32_t);
 			size_t last_updated_bidx = first_updated_bidx + c->dl->pld.msg.len;
 			int64_t nframes_updated=0;
+			bool any_logged = false;
 			for (int i = 0; i < (int)config->subscribed_list.size(); i++)
 			{
 				DarttField* field = config->subscribed_list[i];
@@ -83,6 +97,12 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 					nframes_updated++;
 					calculate_display_value(field);
 
+					if (field->log_ring)
+					{
+						field->log_ring->push(&field->value, field->nbytes);
+						any_logged = true;
+					}
+
 					if(c->wav_writer->is_open())
 					{
 						//can inject stuff here
@@ -91,6 +111,8 @@ static void on_read_reply(const dartt_mem_t* periph, void* ctx)
 					}
 				}
 			}
+			if (any_logged)
+				c->data_logger->notify();
 			config->num_frames += nframes_updated;
 			config->elapsed_ms = time_get_ms();
 			// calculate_display_values(config->leaf_list);
@@ -238,14 +260,6 @@ int main(int argc, char* argv[])
 	plot.init(width, height);
 	
 	
-	if (tcs_lib_init() != TCS_SUCCESS)
-	{
-		printf("Failed to initialize tinycsocket\n");
-	}
-	else
-	{
-		printf("Initialize tinycsocket library success\n");
-	}
 
 
 
@@ -261,7 +275,8 @@ int main(int argc, char* argv[])
 	// Serial connection
 	DarttLink dl(config.ctl_buf, config.periph_buf);
 	WavWriter wav_writer;
-	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl, &wav_writer};
+	DataLogger data_logger;
+	static ReadCallbackCtx cb_ctx = { &config, &plot, &dl, &wav_writer, &data_logger};
 	dl.set_read_reply_callback(on_read_reply, &cb_ctx);
 
 	time_start();	//start time
@@ -321,6 +336,7 @@ int main(int argc, char* argv[])
 			}
 			dl.ctl_base.buf = nullptr;
 			dl.periph_base.buf = nullptr;
+			data_logger.clear_channels();
 			config = DarttConfig();
 
 			if (load_dartt_config(dropped_file_path.c_str(), config, plot, dl.serial, dl))
@@ -356,6 +372,7 @@ int main(int argc, char* argv[])
 			}
 			dl.ctl_base.buf = nullptr;
 			dl.periph_base.buf = nullptr;
+			data_logger.clear_channels();
 			config = DarttConfig();
 
 			elf_parse_error_t err = elf_parser_load_config(dropped_file_path.c_str(), var_name_buf, &config);
@@ -426,10 +443,27 @@ int main(int argc, char* argv[])
 			//The render loop HAS to win the lock, EVERY SINGLE TIME - otherwise we'll drop user input
 			//the callback therefore try-locks, so some display_value loads are skipped due to the render loop needing to win every time
 			std::lock_guard<std::mutex> lock(dl.periph_buf_mutex);	
-			render_live_expressions(config, plot, config_json_path, dl, wav_writer);
+			render_live_expressions(config, plot, config_json_path, dl, wav_writer, data_logger);
 			if (config.subscribed_dirty)
 			{
+				for (size_t i = 0; i < config.subscribed_list.size(); i++)
+				{
+					config.subscribed_list[i]->log_ring = nullptr;
+				}
+
 				collect_subscribed_fields(config.leaf_list, config.subscribed_list);
+
+				if (data_logger.is_running())
+				{
+					data_logger.clear_channels();
+					for (size_t i = 0; i < config.subscribed_list.size(); i++)
+					{
+						DarttField* field = config.subscribed_list[i];
+						NpyWriter::type npy_type;
+						if (field_type_to_npy_type(field->type, npy_type))
+							field->log_ring = data_logger.add_channel(field->name, npy_type, field->nbytes);
+					}
+				}
 			}
 		}
 		if(config.subscribed_dirty)
@@ -473,6 +507,8 @@ int main(int argc, char* argv[])
 	// save_dartt_config("config.json", config);
 
 	dl.stop();
+	data_logger.stop();
+	data_logger.clear_channels();
 
 	// Cleanup
 	shutdown_imgui();

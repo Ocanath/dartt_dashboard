@@ -12,7 +12,6 @@ DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_typ
 	msg_type = msgtype;
 	address = 0;
 	base_offset = 0;
-	comm_mode = COMM_SERIAL;
 	pld = {};
 }
 
@@ -23,7 +22,6 @@ DarttLink::~DarttLink()
 
 void DarttLink::init_serial(int baudrate)
 {
-    comm_mode = COMM_SERIAL;
 	serial.autoconnect(baudrate);
 }
 
@@ -180,7 +178,7 @@ void DarttLink::read_loop()
             bool timed_out = awaiting_reply_ &&
                 (cur_time - last_request_time_) >
                 std::chrono::milliseconds(read_request_timeout_ms);
-			if(timed_out)
+			if(timed_out && serial.connected())
 			{
 				std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time.time_since_epoch());
 				printf("Timeout %lld\n", (long long)ms.count() );
@@ -578,32 +576,10 @@ void DarttLink::dispatch_read_requests(std::unique_lock<std::mutex>& bus_lock)
 
 void DarttLink::send_raw(const uint8_t* data, size_t len)
 {
-    switch (comm_mode)
-    {
-        case COMM_SERIAL:
-            serial.write(const_cast<uint8_t*>(data), (int)len);
-            break;
-        case COMM_UDP:
-            // TODO: tcs_send_to(udp_->socket, data, len, ...)
-            break;
-        case COMM_TCP:
-            // TODO: tcs_send(tcp_->socket, data, len, ...)
-            break;
-    }
+    serial.write(const_cast<uint8_t*>(data), (int)len);
 }
 
 int DarttLink::read_bytes(uint8_t* buf, int max)
 {
-    switch (comm_mode)
-    {
-        case COMM_SERIAL:
-            return serial.read(buf, max);
-        case COMM_UDP:
-            // TODO: tcs_receive_from(udp_.socket, buf, max, ...)
-            return 0;
-        case COMM_TCP:
-            // TODO: tcs_receive(tcp_.socket, buf, max, ...)
-            return 0;
-    }
-    return -1;
+    return serial.read(buf, max);
 }

@@ -55,8 +55,17 @@ add_subdirectory(external/libdwarf)
 # ELFIO (header-only library for ELF symbol table access)
 # No build step required, just include directory
 
-# dartt_reader (provides: dartt_reader)
+# dartt_reader (provides: dartt_link)
 add_subdirectory(src/reader)
+
+# npy_writer (provides: npy_writer)
+add_subdirectory(external/npy_writer)
+
+# npy writer test
+option(TEST_NPY "Build npy_writer test executable" OFF)
+if(TEST_NPY)
+    add_subdirectory(test_npy)
+endif()
 
 # ============================================================================
 # Main Application
@@ -64,7 +73,6 @@ add_subdirectory(src/reader)
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
-	src/dartt_init.cpp
 	src/config.cpp
 	src/elf_parser.cpp
 	src/ui.cpp
@@ -73,6 +81,8 @@ add_executable(${PROJECT_NAME}
 	src/colors.cpp
 	src/time_util.cpp
 	src/wav_writer.cpp
+	src/log_channel.cpp
+	src/logger.cpp
 )
 
 # Debug symbols
@@ -116,6 +126,7 @@ endif()
 
 # Include directories for ELF parsing
 target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/external/ELFIO
     ${CMAKE_CURRENT_SOURCE_DIR}/external/libdwarf/src/lib/libdwarf
 )
@@ -130,9 +141,6 @@ target_link_libraries(${PROJECT_NAME}
     dartt_checksum
     nlohmann_json::nlohmann_json
     dwarf
+    npy_writer
 )
 
-# tinycsocket socket libraries (vendored, header-only with TINYCSOCKET_IMPLEMENTATION)
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} wsock32 ws2_32 iphlpapi)
-endif()

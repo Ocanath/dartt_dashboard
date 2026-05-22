@@ -12,8 +12,8 @@
 
 #include "cobs.h"
 #include "dartt.h"
-#include "dartt_init.h"
 #include "dartt_sync.h"
+#include "serial.h"
 
 #define DARTT_LINK_BUF_SIZE 512
 
@@ -24,15 +24,6 @@
 class DarttLink
 {
 public:
-
-	enum
-	{
-		COMM_SERIAL = 0,
-		COMM_UDP = 1,
-		COMM_TCP = 2
-	};
-
-
 
 
 	DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_type_t msgtype=TYPE_SERIAL_MESSAGE);
@@ -86,12 +77,8 @@ public:
 	uint16_t base_offset;			//offset into the true peripheral blob. Applied when the dartt_sync_t is indexing into a larger blob, with unknown surrounding structure. Should be set to 0 in most situations
 	serial_message_type_t msg_type;
 
-	int      comm_mode;
-
 	//hardware interfaces
     Serial       serial;
-    UdpState     udp;
-    TcpState     tcp;
 
 	payload_layer_msg_t pld;
 
