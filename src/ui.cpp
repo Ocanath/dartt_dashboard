@@ -899,12 +899,13 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		save_dartt_config(config_json_path.c_str(), config, plot, dl);
 	}
 	
-	//calculate average fps
 	{
-		float fps = (float)(config.num_frames)/(float)(config.elapsed_ms) * 1000.f;
-		ImGui::Text("FPS: %f", fps);
+		float sps = (float)(config.num_frames) / (float)(config.elapsed_ms) * 1000.f;
+		size_t nsymbols = config.subscribed_list.size();
+		float fps = nsymbols > 0 ? sps / (float)nsymbols : 0.f;
+		ImGui::Text("SPS: %.1f  FPS: %.1f", sps, fps);
 		ImGui::SameLine();
-		if(ImGui::Button("Clear FPS Counter"))
+		if(ImGui::Button("Clear Counters"))
 		{
 			config.num_frames = 0;
 			time_start();

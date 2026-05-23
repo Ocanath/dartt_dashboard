@@ -97,8 +97,8 @@ private:
 
 	int enqueue_read_requests(dartt_mem_t & ctl_region);
 
-	size_t target_serbuf_rx_size = 32;	//TODO: make a setter/getter for this? or set on init
-	size_t target_serbuf_tx_size = 32;	//TODO: make a setter/getter for this? or set on init
+	size_t target_serbuf_rx_size = 64;	//TODO: make a setter/getter for this? or set on init
+	size_t target_serbuf_tx_size = 64;	//TODO: make a setter/getter for this? or set on init
 
 	std::thread        read_thread_;
     std::thread        write_thread_;
