@@ -114,6 +114,7 @@ private:
     std::queue<std::vector<uint8_t>> tx_queue_;
     std::mutex                       tx_queue_mutex_;
     std::condition_variable          tx_cv_;
+    std::atomic<int>                 write_pending_{0};
 
 	std::vector<std::vector<uint8_t>> read_request_list_;
     std::mutex                        read_request_mutex_;

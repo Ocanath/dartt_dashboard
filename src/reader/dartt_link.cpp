@@ -43,8 +43,9 @@ void DarttLink::stop()
 
 void DarttLink::enqueue_write_frame(std::vector<uint8_t> & frame)
 {
+	write_pending_.fetch_add(1, std::memory_order_relaxed);
 	std::lock_guard<std::mutex> lock(tx_queue_mutex_);
-	tx_queue_.push(std::move(frame));	//move is more efficient than pushing frame directly-transfers ownership of the heap memory to the tx_queue_
+	tx_queue_.push(std::move(frame));
 }
 
 /*
@@ -168,11 +169,6 @@ void DarttLink::read_loop()
         int n = read_bytes(chunk, sizeof(chunk));
         if (n <= 0)
         {
-            // Kernel buffer drained — bus is idle, release so TX can send
-            if (bus_lock.owns_lock())
-			{
-				bus_lock.unlock();
-			}
 
 			std::chrono::steady_clock::time_point cur_time = std::chrono::steady_clock::now();
             bool timed_out = awaiting_reply_ &&
@@ -183,8 +179,13 @@ void DarttLink::read_loop()
 				std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(cur_time.time_since_epoch());
 				printf("Timeout %lld\n", (long long)ms.count() );
 			}
-            if (!awaiting_reply_ || timed_out)
+			if (!awaiting_reply_ || timed_out)
 			{
+				// Kernel buffer drained — bus is idle, release so TX can send
+				if (bus_lock.owns_lock())
+				{
+					bus_lock.unlock();
+				}
 				dispatch_read_requests(bus_lock);
 			}
         }
@@ -477,6 +478,7 @@ void DarttLink::write_loop()
             std::lock_guard<std::mutex> bus(bus_mutex_);
             send_raw(frame.data(), frame.size());
         }
+        write_pending_.fetch_sub(1, std::memory_order_relaxed);
     }
 }
 
@@ -547,13 +549,8 @@ int DarttLink::process_frame()
 void DarttLink::dispatch_read_requests(std::unique_lock<std::mutex>& bus_lock)
 {
 
-    {
-        std::lock_guard<std::mutex> q_lock(tx_queue_mutex_);
-        if (!tx_queue_.empty())
-        {
-            return;
-        }
-    }
+    if (write_pending_.load(std::memory_order_relaxed) > 0)
+        return;
 
     std::lock_guard<std::mutex> rr_lock(read_request_mutex_);
     if (read_request_list_.empty())
