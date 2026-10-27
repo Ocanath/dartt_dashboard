@@ -13,6 +13,7 @@ DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_typ
 	address = 0;
 	base_offset = 0;
 	pld = {};
+	transport_iface = transport_iface_t::SERIAL;
 }
 
 DarttLink::~DarttLink()

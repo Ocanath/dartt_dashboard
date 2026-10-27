@@ -77,6 +77,14 @@ public:
 	uint16_t base_offset;			//offset into the true peripheral blob. Applied when the dartt_sync_t is indexing into a larger blob, with unknown surrounding structure. Should be set to 0 in most situations
 	serial_message_type_t msg_type;
 
+
+	enum class transport_iface_t : int {
+		SERIAL = 1,
+		UDP = 2,
+		TCP = 3
+	};	
+	transport_iface_t transport_iface;
+	
 	//hardware interfaces
     Serial       serial;
 

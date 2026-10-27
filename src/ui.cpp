@@ -845,6 +845,14 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 
     ImGui::Begin("Live Expressions");
 
+	//Button panel for interface
+	ImGui::RadioButton("Serial", (int*)(&dl.transport_iface), (int)(DarttLink::transport_iface_t::SERIAL));
+	ImGui::SameLine();
+	ImGui::RadioButton("UDP", (int*)(&dl.transport_iface), (int)(DarttLink::transport_iface_t::UDP));
+	ImGui::SameLine();
+	ImGui::RadioButton("TCP", (int*)(&dl.transport_iface), (int)(DarttLink::transport_iface_t::TCP));
+
+
 	int frame_format = dl.msg_type;
 	ImGui::RadioButton("TYPE_SERIAL_MESSAGE", &frame_format, TYPE_SERIAL_MESSAGE);
 	ImGui::SameLine();
