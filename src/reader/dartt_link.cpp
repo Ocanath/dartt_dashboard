@@ -569,6 +569,7 @@ void DarttLink::dispatch_read_requests(std::unique_lock<std::mutex>& bus_lock)
 
 // ---------------------------------------------------------------------------
 // Transport
+// The transport layer is where we can (theoretically) switch between UDP/TCP and serial
 // ---------------------------------------------------------------------------
 
 void DarttLink::send_raw(const uint8_t* data, size_t len)
