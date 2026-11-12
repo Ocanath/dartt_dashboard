@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cobs.h"
+#include "PPP.h"
 #include "dartt.h"
 #include "dartt_sync.h"
 #include "serial.h"
@@ -21,6 +22,13 @@
 
 
 
+// Byte-stuffing layer used on the wire. Both ends of the link must agree.
+enum class FramingMode : int
+{
+	COBS = 0,	// 0x00 delimited
+	HDLC = 1	// PPP/HDLC, 0x7E delimited
+};
+
 class DarttLink
 {
 public:
@@ -30,6 +38,11 @@ public:
 	~DarttLink();
 
 	void init_serial(int baudrate);
+
+	// Select the byte-stuffing layer. Safe to call while running; rebuilds the cached
+	// read requests so they are re-encoded in the new mode.
+	void set_framing_mode(FramingMode mode);
+	FramingMode get_framing_mode() const { return framing_mode_.load(); }
 
     void start();   // spawn read + write threads
     void stop();    // signal both + join
@@ -92,6 +105,9 @@ private:
     void send_raw(const uint8_t* data, size_t len);
     int  read_bytes(uint8_t* buf, int max);
 
+	// Byte-stuff the first `len` bytes of `frame` (which must have COBS headroom) per the active mode, and resize frame to the wire length
+	int encode_frame(std::vector<uint8_t> & frame, size_t len);
+
 	int create_read_request_frame(dartt_mem_t & ctl, std::vector<uint8_t> & frame);
 	int create_write_frame(dartt_mem_t & ctl, std::vector<uint8_t> & frame);
 
@@ -130,6 +146,13 @@ private:
     uint8_t    dec_mem_[DARTT_LINK_BUF_SIZE];
     cobs_buf_t cobs_enc_{};
     cobs_buf_t cobs_dec_{};
+
+    // HDLC accumulation (read thread only). Decoded payload lands directly in dec_mem_.
+    uint8_t      ppp_enc_mem_[DARTT_LINK_BUF_SIZE];
+    ppp_buffer_t ppp_enc_{};
+    ppp_buffer_t ppp_dec_{};
+
+    std::atomic<FramingMode> framing_mode_{FramingMode::COBS};
 
     read_reply_cb_t on_read_reply_cb_  = nullptr;
     void*           on_read_reply_ctx_ = nullptr;

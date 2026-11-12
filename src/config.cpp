@@ -338,6 +338,8 @@ bool load_dartt_config(const char* json_path, DarttConfig& config, Plotter& plot
 		dl.address = ser_settings.value("dartt_serial_address", 0);
 		dl.base_offset = ser_settings.value("dartt_blob_base_offset", 0);
 		uint32_t baudrate = ser_settings.value("baudrate", 921600);
+		int framing = ser_settings.value("framing_mode", (int)FramingMode::COBS);
+		dl.set_framing_mode(framing == (int)FramingMode::HDLC ? FramingMode::HDLC : FramingMode::COBS);
 		dl.msg_type = ser_settings.value("frame_format", TYPE_SERIAL_MESSAGE);
 		if(baudrate != serial.get_baud_rate())
 		{
@@ -402,6 +404,7 @@ void save_serial_settings(json & j, DarttLink & dl)
 	serial_settings["dartt_blob_base_offset"] = dl.base_offset;
 	serial_settings["baudrate"] = dl.serial.get_baud_rate();
 	serial_settings["frame_format"] = (int)dl.msg_type;
+	serial_settings["framing_mode"] = (int)dl.get_framing_mode();	//0 = COBS, 1 = HDLC
 	j["serial_settings"] = serial_settings;
 }
 
