@@ -9,6 +9,8 @@ DarttLink::DarttLink(dartt_mem_t & ctl, dartt_mem_t & periph, serial_message_typ
 	periph_base = periph;
 	cobs_enc_ = { enc_mem_, sizeof(enc_mem_), 0, COBS_ENCODED };
     cobs_dec_ = { dec_mem_, sizeof(dec_mem_), 0, COBS_DECODED };
+	ppp_enc_ = { ppp_enc_mem_, sizeof(ppp_enc_mem_), 0 };
+	ppp_dec_ = { dec_mem_, sizeof(dec_mem_), 0 };
 	msg_type = msgtype;
 	address = 0;
 	base_offset = 0;
@@ -24,6 +26,12 @@ DarttLink::~DarttLink()
 void DarttLink::init_serial(int baudrate)
 {
 	serial.autoconnect(baudrate);
+}
+
+void DarttLink::set_framing_mode(FramingMode mode)
+{
+	framing_mode_ = mode;	// read thread notices the change and resets its decoder state
+	build_read_requests();
 }
 
 void DarttLink::start()
@@ -164,9 +172,19 @@ void DarttLink::read_loop()
 {
     std::unique_lock<std::mutex> bus_lock(bus_mutex_, std::defer_lock);
     uint8_t chunk[64];
+    FramingMode active_mode = framing_mode_.load();
 
     while (running_)
     {
+        FramingMode mode = framing_mode_.load();
+        if (mode != active_mode)
+        {
+            // Mode switched mid-stream: drop any partially accumulated frame
+            active_mode = mode;
+            cobs_enc_.length = 0;
+            ppp_enc_.length  = 0;
+        }
+
         int n = read_bytes(chunk, sizeof(chunk));
         if (n <= 0)
         {
@@ -198,7 +216,25 @@ void DarttLink::read_loop()
             if (!bus_lock.owns_lock())
 				bus_lock.lock();
 
-            int ret = cobs_stream(b, &cobs_enc_, &cobs_dec_);
+            int ret = COBS_STREAMING_IN_PROGRESS;
+            if (mode == FramingMode::HDLC)
+            {
+                size_t n_payload = parse_PPP_stream(b, &ppp_dec_, &ppp_enc_);
+                if (n_payload > 0)
+                {
+                    cobs_dec_.length = n_payload;	// decoded payload shares dec_mem_
+                    ret = COBS_SUCCESS;
+                }
+                else if (ppp_enc_.length >= ppp_enc_.size)
+                {
+                    ret = COBS_ERROR_SERIAL_OVERRUN;
+                }
+            }
+            else
+            {
+                ret = cobs_stream(b, &cobs_enc_, &cobs_dec_);
+            }
+
             if (ret == COBS_SUCCESS)
             {
     			process_frame();
@@ -215,6 +251,7 @@ void DarttLink::read_loop()
             else if (ret == COBS_ERROR_SERIAL_OVERRUN)
             {
                 cobs_enc_.length = 0;
+                ppp_enc_.length  = 0;
             }
             // Hold the lock for the rest of the chunk regardless — more frames may follow
         }
@@ -275,20 +312,39 @@ int DarttLink::create_write_frame(dartt_mem_t & ctl, std::vector<uint8_t> & fram
     {
         return rc;	//return empty vector if fail
     }
+	return encode_frame(frame, tx_buf.len);
+}
+
+int DarttLink::encode_frame(std::vector<uint8_t> & frame, size_t len)
+{
+	if(framing_mode_.load() == FramingMode::HDLC)
+	{
+		std::vector<uint8_t> stuffed(len * 2 + 1);	// HDLC worst case
+		ppp_buffer_t in = { frame.data(), frame.size(), len };
+		ppp_buffer_t out = { stuffed.data(), stuffed.size(), 0 };
+		size_t n = PPP_stuff(&in, &out);
+		if(n == 0)
+		{
+			return DARTT_ERROR_MEMORY_OVERRUN;
+		}
+		stuffed.resize(n);
+		frame = std::move(stuffed);
+		return DARTT_PROTOCOL_SUCCESS;
+	}
+
 	cobs_buf_t cobs_tx = {
-		.buf = tx_buf.buf,
-		.size = tx_buf.size,
-		.length = tx_buf.len,
+		.buf = frame.data(),
+		.size = frame.size(),
+		.length = len,
 		.encoded_state = COBS_DECODED
 	};
-	rc = cobs_encode_single_buffer(&cobs_tx);
+	int rc = cobs_encode_single_buffer(&cobs_tx);
 	if(rc != COBS_SUCCESS)
 	{
 		return rc;
 	}
-	//resize again to cobs_tx.length???
 	frame.resize(cobs_tx.length);
-	return rc;
+	return DARTT_PROTOCOL_SUCCESS;
 }
 
 int DarttLink::create_read_request_frame(dartt_mem_t & ctl, std::vector<uint8_t> & frame)
@@ -350,19 +406,7 @@ int DarttLink::create_read_request_frame(dartt_mem_t & ctl, std::vector<uint8_t>
     {
         return rc;
     }
-	cobs_buf_t cobs_tx = {
-		.buf = tx_buf.buf,
-		.size = tx_buf.size,
-		.length = tx_buf.len,
-		.encoded_state = COBS_DECODED
-	};
-	rc = cobs_encode_single_buffer(&cobs_tx);
-	if(rc != COBS_SUCCESS)
-	{
-		return rc;
-	}
-	frame.resize(cobs_tx.length);
-	return rc;
+	return encode_frame(frame, tx_buf.len);
 }
 
 

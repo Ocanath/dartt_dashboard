@@ -896,6 +896,21 @@ bool render_live_expressions(DarttConfig& config, Plotter& plot, const std::stri
 		}
 	}
 
+	{
+		ImGui::Text("Framing: ");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(120);
+		const char* framing_names[] = { "COBS", "HDLC (PPP)" };
+		int framing_idx = (int)dl.get_framing_mode();
+		if (ImGui::Combo("##framing_mode", &framing_idx, framing_names, IM_ARRAYSIZE(framing_names)))
+		{
+			dl.set_framing_mode((FramingMode)framing_idx);
+			config.subscribed_dirty = true;
+		}
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Byte-stuffing layer. Must match the device firmware.");
+	}
+
 	ImGui::Text("Dartt blob offset: ");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(50);
